@@ -1,0 +1,12 @@
+.env
+.env.*
+legacy/
+previews/
+supabase/
+tests/
+test-results/
+playwright-report/
+*.zip
+__pycache__/
+node_modules/
+dist/

@@ -1,0 +1,5 @@
+project_id = "workroom"
+
+[functions.manage-employee]
+# JWT is validated inside the function with Auth.getUser before admin access.
+verify_jwt = false

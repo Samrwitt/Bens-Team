@@ -1,0 +1,11 @@
+*.sqlite3
+__pycache__/
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+supabase/.temp/
+test-results/
+playwright-report/
+.vercel/
