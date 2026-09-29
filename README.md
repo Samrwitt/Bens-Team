@@ -98,4 +98,4 @@ Browser tests use mocked Supabase HTTP responses to check UI wiring; they do not
 
 The original runnable Python/SQLite app and its Docker setup are preserved under `legacy/`. No SQLite data or existing Docker volumes have been deleted. This Supabase schema starts empty; existing SQLite records are not automatically imported. Employee accounts must be recreated in Supabase Auth; old password hashes cannot be copied into this login flow.
 
-A Supabase project URL/public key and authenticated deployment access are still required to connect and publish the app. No hosted backend has been provisioned by these local changes.
+Supabase backend and Vercel frontend are now deployed. Production: https://bens-workroom.vercel.app. See DEPLOYMENT.md for deployment details and the pending first-manager account setup.
