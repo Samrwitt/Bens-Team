@@ -1,0 +1,81 @@
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 15px 0 6px;
+}
+form > input,
+form > select,
+form > textarea {
+  width: 100%;
+}
+form > textarea {
+  min-height: 100px;
+}
+dialog {
+  border: 1px solid #e2e7eb;
+  border-radius: 14px;
+  width: 510px;
+  padding: 30px;
+  box-shadow: 0 20px 80px #0002;
+}
+dialog::backdrop {
+  background: #142c3e66;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+.secondary {
+  background: #edf1f3;
+  color: #5b6974;
+}
+.checks label {
+  font-weight: 400;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.error {
+  color: #b24637;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.login {
+  max-width: 420px;
+  margin: 10vh auto;
+}
+.login .brand {
+  margin-bottom: 35px;
+}
+.login h1 {
+  font-size: 26px;
+}
+.login button {
+  width: 100%;
+  margin-top: 22px;
+}
+#toast {
+  position: fixed;
+  right: 30px;
+  bottom: 25px;
+  background: #203d32;
+  color: white;
+  border-radius: 8px;
+  padding: 12px 20px;
+  display: none;
+}
+.empty {
+  padding: 36px;
+  color: #7d8790;
+  text-align: center;
+}
+.back {
+  font-size: 13px;
+  color: #788792;
+}
+.full {
+  width: 100%;
+}

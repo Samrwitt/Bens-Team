@@ -2,7 +2,38 @@
 
 The active app is a static Vite frontend backed by Supabase Auth, PostgreSQL, and one Edge Function. No Python server or Docker service is needed in production.
 
-Implemented: manager email/password login, employee account creation and password resets, teams, assignments, statuses, feedback and nested replies. Existing UI screenshots in `previews/` show the earlier design; sign-in now includes email.
+Implemented: manager email/password login, employee account creation and password resets, teams, assignments, statuses, feedback and nested replies.
+
+## Start here: edit the code
+
+The editable application code is directly in this project folder.
+
+| File or folder | What to edit |
+| --- | --- |
+| [static/js/pages/login.js](static/js/pages/login.js) | Sign-in page content |
+| [static/js/pages/assignments.js](static/js/pages/assignments.js) | Assignment list, search, filters, and statistics |
+| [static/js/pages/assignment-detail.js](static/js/pages/assignment-detail.js) | Assignment brief, status, feedback, and replies |
+| [static/js/pages/employees.js](static/js/pages/employees.js) | Employee list |
+| [static/js/pages/teams.js](static/js/pages/teams.js) | Team cards and members |
+| [static/js/forms/](static/js/forms/) | Add/edit dialogs, grouped by feature |
+| [static/js/components/](static/js/components/) | Shared navigation, headings, dialog, fields, and notifications |
+| [static/css/](static/css/) | Base styles, layout, components, forms, and responsive rules |
+| [static/js/services/backend.js](static/js/services/backend.js) | Supabase calls |
+| [static/app.js](static/app.js) | App startup, routing, and action wiring |
+| [static/index.html](static/index.html) | HTML shell that loads the app |
+| [supabase/functions/manage-employee/index.ts](supabase/functions/manage-employee/index.ts) | Employee management backend |
+| [supabase/migrations/](supabase/migrations/) | Database schema and access policies |
+| [tests/](tests/) | Automated checks |
+
+**Where is the page HTML?** Open the matching file in `static/js/pages/`. Its multiline `/* HTML */` templates contain the headings, text, tables, and buttons for that screen. `${...}` inserts dynamic values. Dialog contents live in `static/js/forms/`. Keep `escapeHtml(...)` around user-entered text when editing templates.
+
+`static/style.css` loads the stylesheets in order. Start with `static/css/base.css` for global defaults, `layout.css` for navigation and headings, `components.css` for tables/cards/details, `forms.css` for forms/dialogs/login, and `responsive.css` for smaller screens.
+
+The page factories receive shared state and actions from `static/app.js`; they do not fetch their own copies of workspace data. Existing HTML event attributes call the actions registered there. Shared formatting helpers live in `static/js/utils/format.js`.
+
+To run locally, follow section 3 below. Changes do not automatically update the live website.
+
+`Workroom-Clean.zip` is a shareable snapshot of the active source, tests, configuration, and setup instructions. Extract it to edit the files. It excludes private environment files and installed dependencies. Recreate the ZIP after further edits before sharing it again.
 
 ## 1. Create the Supabase backend
 
@@ -93,9 +124,5 @@ npm run test:ui  # requires Chrome; set CHROME_PATH if installed elsewhere
 Validation completed locally: production build, PostgreSQL policy tests, Deno Edge Function type-check, and Chrome workflow test passed. Hosted Supabase Auth and Edge Function integration has not yet been tested.
 
 Browser tests use mocked Supabase HTTP responses to check UI wiring; they do not replace live Auth/Edge Function verification after deployment.
-
-## Previous version and data
-
-The original runnable Python/SQLite app and its Docker setup are preserved under `legacy/`. No SQLite data or existing Docker volumes have been deleted. This Supabase schema starts empty; existing SQLite records are not automatically imported. Employee accounts must be recreated in Supabase Auth; old password hashes cannot be copied into this login flow.
 
 Supabase backend and Vercel frontend are now deployed. Production: https://bens-workroom.vercel.app. See DEPLOYMENT.md for deployment details and the pending first-manager account setup.
