@@ -53,6 +53,19 @@ test("manager signs in and uses Supabase-backed UI actions", async ({
       };
     else if (url.pathname === "/auth/v1/logout") body = {};
     else if (url.pathname === "/auth/v1/user") body = user;
+    else if (url.pathname === "/functions/v1/analyze-assignment")
+      body = {
+        configured: false,
+        assignment_id: 1,
+        feedback_count: feedback.length,
+        sources: [
+          {
+            reference: "A1",
+            label: "Welcome guide",
+            text: "Prepare the guide",
+          },
+        ],
+      };
     else if (req.method() === "POST" || req.method() === "PATCH") {
       const data = req.postDataJSON();
       writes.push({ path: url.pathname, data });

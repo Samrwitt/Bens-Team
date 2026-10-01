@@ -1,3 +1,4 @@
+import { resetWorkspace } from "../state.js";
 import { api } from "../services/backend.js";
 import { escapeHtml } from "../utils/format.js";
 import { toast } from "../components/toast.js";
@@ -8,7 +9,7 @@ export function createLoginPage({ state, refresh }) {
     app.innerHTML = /* HTML */ `<div class="login panel">
       <div class="brand"><span class="logo">w</span>workroom</div>
       <h1>Welcome back.</h1>
-      <p class="muted">Sign in to your manager workspace.</p>
+      <p class="muted">Sign in to your workspace.</p>
       <form id="login">
         <label for="email">Email</label
         ><input
@@ -28,7 +29,6 @@ export function createLoginPage({ state, refresh }) {
         <div class="error" role="alert">${escapeHtml(message)}</div>
         <button>Sign in →</button>
       </form>
-
     </div>`;
     document.querySelector("form").onsubmit = async (e) => {
       e.preventDefault();
@@ -43,7 +43,7 @@ export function createLoginPage({ state, refresh }) {
   async function logout() {
     try {
       await api("logout", {});
-      state.data = null;
+      resetWorkspace();
       dialog.close();
       login();
     } catch (e) {

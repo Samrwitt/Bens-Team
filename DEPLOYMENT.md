@@ -12,3 +12,7 @@ Supabase project: `ubjqmdvjttkufcfeyfyw` (Ben's Project).
 - First manager account pending the user's manager email.
 
 Never upload `.env.local` or account credentials. Only the two public `VITE_` values belong in Vercel build configuration.
+
+## Section 2 upgrade (prepared locally)
+
+The employee portal and assignment AI analysis require the new `202609300001_feedback_authors.sql` migration, the `analyze-assignment` Edge Function, and a frontend redeploy. They have not been deployed by this task. Follow [SECTION2.md](SECTION2.md). Gemini can be connected afterward with the server-only `GEMINI_API_KEY` secret.

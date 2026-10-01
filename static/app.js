@@ -1,6 +1,6 @@
 // Application entry point: session loading, routing, and UI action wiring.
 import { api, configured, onSignedOut } from "./js/services/backend.js";
-import { state } from "./js/state.js";
+import { state, resetWorkspace } from "./js/state.js";
 import { escapeHtml } from "./js/utils/format.js";
 import { dialog, createModal } from "./js/components/modal.js";
 import { createLoginPage } from "./js/pages/login.js";
@@ -28,13 +28,17 @@ const formContext = {
   modal: createModal(refresh),
 };
 async function refresh() {
+  const requestId = ++state.requestId;
   try {
-    state.data = await api("data");
+    const data = await api("data");
+    if (requestId !== state.requestId) return;
+    state.data = data;
     render();
   } catch (error) {
-    if (error.code === "SIGNED_OUT" || error.code === "MANAGER_REQUIRED") {
+    if (requestId !== state.requestId) return;
+    if (error.code === "SIGNED_OUT" || error.code === "PROFILE_REQUIRED") {
       state.data = null;
-      login(error.code === "MANAGER_REQUIRED" ? error.message : "");
+      login(error.code === "PROFILE_REQUIRED" ? error.message : "");
     } else {
       app.innerHTML = /* HTML */ `
         <div class="login panel">
@@ -52,8 +56,10 @@ function render() {
   const route = location.hash.slice(1) || "assignments";
   if (route.startsWith("assignment/"))
     return detail(Number(route.split("/")[1]));
-  if (route === "employees") return employees();
-  if (route === "teams") return teams();
+  if (state.data.profile.role === "manager" && route === "employees")
+    return employees();
+  if (state.data.profile.role === "manager" && route === "teams")
+    return teams();
   assignments();
 }
 
@@ -77,7 +83,7 @@ Object.assign(window, {
 });
 window.addEventListener("hashchange", render);
 onSignedOut(() => {
-  state.data = null;
+  resetWorkspace();
   dialog.close();
   login();
 });

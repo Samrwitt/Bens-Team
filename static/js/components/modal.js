@@ -1,8 +1,14 @@
+import { state } from "../state.js";
 import { api } from "../services/backend.js";
 import { toast } from "./toast.js";
 export const dialog = document.querySelector("#dialog");
 export function createModal(refresh) {
   function modal(title, fields, endpoint, transform = (x) => x) {
+    if (
+      !state.data ||
+      (endpoint !== "feedback" && state.data.profile.role !== "manager")
+    )
+      return;
     dialog.innerHTML = /* HTML */ `<h2>${title}</h2>
       <form>
         ${fields}

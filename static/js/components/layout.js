@@ -1,16 +1,22 @@
+import { state } from "../state.js";
+import { escapeHtml, getInitials } from "../utils/format.js";
 const app = document.querySelector("#app");
 export function shell(page, content) {
+  const manager = state.data.profile.role === "manager";
+  const navigation = manager
+    ? [
+        ["assignments", "▤", "Assignments"],
+        ["employees", "♙", "Employees"],
+        ["teams", "▦", "Teams"],
+      ]
+    : [["assignments", "▤", "My assignments"]];
   app.innerHTML = /* HTML */ `<aside>
       <a class="brand" href="#assignments"
         ><span class="logo">w</span>workroom</a
       >
       <div class="caption">Workspace</div>
       <nav>
-        ${[
-          ["assignments", "▤", "Assignments"],
-          ["employees", "♙", "Employees"],
-          ["teams", "▦", "Teams"],
-        ]
+        ${navigation
           .map(
             ([p, icon, n]) =>
               /* HTML */ `<a href="#${p}" class="${p === page ? "active" : ""}"
@@ -20,14 +26,18 @@ export function shell(page, content) {
           .join("")}
       </nav>
       <div class="aside-bottom">
-        <span class="avatar">M</span>Manager workspace
+        <span class="avatar"
+          >${escapeHtml(getInitials(state.data.profile.name))}</span
+        >${manager ? "Manager workspace" : "Employee workspace"}
       </div>
     </aside>
     <main>
       <header class="topbar">
         <span
           >Workspace &nbsp; / &nbsp;
-          ${page[0].toUpperCase() + page.slice(1)}</span
+          ${!manager && page === "assignments"
+            ? "My assignments"
+            : page[0].toUpperCase() + page.slice(1)}</span
         ><button onclick="logout()">Sign out ↗</button>
       </header>
       ${content}

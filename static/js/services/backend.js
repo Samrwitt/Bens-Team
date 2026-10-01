@@ -21,8 +21,8 @@ async function allRows(table) {
     if (page.length < 500) return rows;
   }
 }
-async function manageEmployee(body) {
-  const { data, error } = await client.functions.invoke("manage-employee", {
+async function invokeFunction(name, body) {
+  const { data, error } = await client.functions.invoke(name, {
     body,
   });
   if (error) {
@@ -32,7 +32,7 @@ async function manageEmployee(body) {
     } catch {}
     throw new Error(message);
   }
-  if (data.error) throw new Error(data.error);
+  if (data?.error) throw new Error(data.error);
   return data;
 }
 export async function api(path, body) {
@@ -56,15 +56,12 @@ export async function api(path, body) {
         .eq("auth_user_id", session.user.id)
         .maybeSingle(),
     );
-    if (profile?.role !== "manager") {
-      await client.auth.signOut();
+    if (!profile || !["manager", "employee"].includes(profile.role)) {
       throw Object.assign(
         new Error(
-          "This is the manager workspace. Your account does not have manager access.",
+          "Your account is not linked to this workspace. Contact your manager.",
         ),
-        {
-          code: "MANAGER_REQUIRED",
-        },
+        { code: "PROFILE_REQUIRED" },
       );
     }
     const tables = ["employees", "teams", "members", "assignments", "feedback"];
@@ -72,17 +69,30 @@ export async function api(path, body) {
     const data = Object.fromEntries(
       tables.map((table, i) => [table, values[i]]),
     );
+    data.profile = profile;
     data.people = data.employees;
-    data.employees = data.people.filter((person) => person.role === "employee");
+    if (profile.role === "employee") {
+      const authors = await result(client.rpc("feedback_authors"));
+      data.people = [
+        ...data.people,
+        ...authors.filter(
+          (author) => author.auth_user_id !== profile.auth_user_id,
+        ),
+      ];
+    }
+    data.employees = data.employees.filter(
+      (person) => person.role === "employee",
+    );
     return data;
   }
+  if (path === "analysis") return invokeFunction("analyze-assignment", body);
   if (path === "employees")
-    return manageEmployee({
+    return invokeFunction("manage-employee", {
       ...body,
       action: "create",
     });
   if (path === "password")
-    return manageEmployee({
+    return invokeFunction("manage-employee", {
       ...body,
       action: "reset-password",
     });

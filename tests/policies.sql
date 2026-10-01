@@ -26,6 +26,8 @@ do $$ begin
 end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
 do $$ begin
+ if (select count(*) from public.feedback_authors()) <> 1 then raise exception 'Accessible author names missing'; end if;
+ if (select name from public.feedback_authors() limit 1) <> 'Manager' then raise exception 'Wrong author disclosed'; end if;
  if public.is_manager() then raise exception 'Employee became manager'; end if;
  if (select count(*) from public.assignments) <> 2 then raise exception 'Employee assignment isolation failed'; end if;
  if (select count(*) from public.employees) <> 1 then raise exception 'Employee profile isolation failed'; end if;
@@ -56,6 +58,7 @@ insert into public.feedback(assignment_id,parent_id,body) values(1,1,'Allowed em
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',true);
 do $$ begin
  if (select count(*) from public.assignments) <> 1 then raise exception 'Other employee isolation failed'; end if;
+ if (select count(*) from public.feedback_authors()) <> 0 then raise exception 'Unrelated author names disclosed'; end if;
  if (select count(*) from public.feedback) <> 0 then raise exception 'Other employee can read private feedback'; end if;
 end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
@@ -66,6 +69,10 @@ do $$ begin
 end $$;
 set local role anon;
 do $$ begin
+ begin
+  perform * from public.feedback_authors();
+  raise exception 'Anonymous author lookup succeeded';
+ exception when insufficient_privilege then null; end;
  begin
   perform * from public.assignments;
   raise exception 'Anonymous read succeeded';

@@ -1,3 +1,4 @@
+import { mountAssignmentAnalysis } from "../components/assignment-analysis.js";
 import {
   escapeHtml,
   formatAssignmentId,
@@ -40,6 +41,7 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
       shell("assignments", '<p class="empty">Assignment not found.</p>');
       return;
     }
+    const manager = state.data.profile.role === "manager";
     const feedback = state.data.feedback.filter((f) => f.assignment_id === id);
     shell(
       "assignments",
@@ -55,6 +57,9 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
               <h2>Assignment brief</h2>
               <p class="description">${escapeHtml(a.description)}</p>
             </div>
+            ${manager
+              ? '<div class="panel" id="assignment-analysis"></div>'
+              : ""}
             <div class="panel">
               <h2>
                 Feedback
@@ -94,20 +99,25 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
                 <small>Due date</small>${escapeHtml(a.due)}
               </div>
               <div class="meta">
-                <label for="status">Status</label
-                ><select class="full" id="status">
-                  ${["Open", "In progress", "Done"]
-                    .map(
-                      (s) =>
-                        /* HTML */ `<option ${a.status === s ? "selected" : ""}>
-                          ${s}
-                        </option>`,
-                    )
-                    .join("")}
-                </select>
+                ${manager
+                  ? /* HTML */ `
+                      <label for="status">Status</label>
+                      <select class="full" id="status">
+                        ${["Open", "In progress", "Done"]
+                          .map(
+                            (status) =>
+                              /* HTML */ `<option
+                                ${a.status === status ? "selected" : ""}
+                              >
+                                ${status}
+                              </option>`,
+                          )
+                          .join("")}
+                      </select>
+                    `
+                  : /* HTML */ `<small>Status</small>${statusBadge(a.status)}`}
               </div>
             </div>
-      
           </section>
         </div>`,
     );
@@ -124,19 +134,25 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
         e.target.querySelector(".error").textContent = err.message;
       }
     };
-    document.querySelector("#status").onchange = async (e) => {
-      try {
-        await api("status", {
-          id,
-          status: e.target.value,
-        });
-        await refresh();
-        toast("Status updated");
-      } catch (err) {
-        toast(err.message);
-        render();
-      }
-    };
+    if (manager) {
+      mountAssignmentAnalysis(
+        document.querySelector("#assignment-analysis"),
+        id,
+      );
+      document.querySelector("#status").onchange = async (e) => {
+        try {
+          await api("status", {
+            id,
+            status: e.target.value,
+          });
+          await refresh();
+          toast("Status updated");
+        } catch (err) {
+          toast(err.message);
+          render();
+        }
+      };
+    }
   }
   return {
     detail,

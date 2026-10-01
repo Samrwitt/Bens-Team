@@ -3,3 +3,7 @@ project_id = "workroom"
 [functions.manage-employee]
 # JWT is validated inside the function with Auth.getUser before admin access.
 verify_jwt = false
+
+[functions.analyze-assignment]
+# The handler verifies the JWT through Auth.getUser and checks the manager role.
+verify_jwt = false

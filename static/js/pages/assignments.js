@@ -7,12 +7,17 @@ import {
 import { shell, heading } from "../components/layout.js";
 export function createAssignmentsPage({ state }) {
   function assignments() {
+    const manager = state.data.profile.role === "manager";
     shell(
       "assignments",
       heading(
-        "Assignments",
-        "A clear view of what needs to get done.",
-        '<button onclick="assignmentForm()">＋ New assignment</button>',
+        manager ? "Assignments" : "My assignments",
+        manager
+          ? "A clear view of what needs to get done."
+          : "Work assigned to you and your teams.",
+        manager
+          ? '<button onclick="assignmentForm()">＋ New assignment</button>'
+          : "",
       ) +
         /* HTML */ `<div class="stats">
             ${[
@@ -71,8 +76,7 @@ export function createAssignmentsPage({ state }) {
               </thead>
               <tbody id="rows"></tbody>
             </table>
-          </div>
-         `,
+          </div> `,
     );
     rows();
   }
@@ -113,7 +117,7 @@ export function createAssignmentsPage({ state }) {
             </tr>`,
         )
         .join("") ||
-      '<tr><td colspan="5" class="empty">No assignments found. Create one to get started.</td></tr>';
+      `<tr><td colspan="5" class="empty">${state.data.profile.role === "manager" ? "No assignments found. Create one to get started." : "No assignments found. Try another search or check back with your manager."}</td></tr>`;
   }
   return {
     assignments,

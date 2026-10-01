@@ -1,0 +1,44 @@
+#analysis-form textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.analysis-status {
+  font-size: 13px;
+}
+.analysis-result {
+  margin-top: 20px;
+}
+.analysis-answer,
+.analysis-source p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.analysis-note {
+  font-size: 12px;
+}
+.analysis-sources {
+  margin-top: 20px;
+  font-size: 13px;
+}
+.analysis-sources summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.source-list {
+  max-height: 360px;
+  overflow: auto;
+  margin-top: 12px;
+}
+.analysis-source {
+  padding: 12px 0;
+  border-top: 1px solid #edf0f2;
+}
+.analysis-source p {
+  margin: 8px 0 0;
+  color: #63707c;
+}
+button:disabled,
+textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
