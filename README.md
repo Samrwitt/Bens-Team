@@ -117,7 +117,9 @@ Verify live manager sign-in, employee creation, team creation, assignment creati
 - Employees can see feedback-author names only for assignments they can access. Other profile fields remain private.
 - AI source retrieval and generation require a verified manager session. Gemini credentials remain on the server.
 
-File uploads/Storage are not included. Assignment AI uses the brief and feedback already stored in the workspace.
+Feedback and replies support up to 10 private file attachments (20 MB each), including images, PDFs, and code. Apply `supabase/migrations/202610030001_feedback_attachments.sql` before using this version. Downloads require assignment access.
+
+RAG is planned as the final section: combine the manager assignment, all feedback/replies, and uploaded file contents for an API LLM or local vector analysis. File extraction and retrieval are not implemented yet; current assignment AI uses only the brief and text feedback.
 
 ## Validation
 

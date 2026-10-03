@@ -25,6 +25,7 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
               · ${escapeHtml(new Date(f.created).toLocaleString())}</small
             >
             <p>${escapeHtml(f.body)}</p>
+            ${(state.data.feedback_attachments || []).filter((file) => file.feedback_id === f.id).map((file) => `<button type="button" class="textbutton" data-attachment="${file.id}">Download ${escapeHtml(file.name)} (${Math.ceil(file.size / 1024)} KB)</button>`).join(" ")}
             <button
               class="textbutton"
               onclick="feedbackForm(${f.assignment_id},${f.id})"
@@ -80,6 +81,9 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
                   placeholder="Share guidance or ask for an update…"
                   required
                 ></textarea>
+                <label for="feedback-files">Attachments</label>
+                <input id="feedback-files" name="files" type="file" multiple>
+                <small class="muted">Up to 10 files, 20 MB each. Images, PDFs, code, and other files.</small>
                 <div class="error" role="alert"></div>
                 <button>Post feedback</button>
               </form>
@@ -123,17 +127,36 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
     );
     document.querySelector("#feedback").onsubmit = async (e) => {
       e.preventDefault();
+      const button = e.target.querySelector("button");
+      button.disabled = true;
       try {
         await api("feedback", {
           assignment_id: id,
+          files: Array.from(e.target.elements.files.files),
           body: new FormData(e.target).get("body"),
         });
         await refresh();
         toast("Feedback added");
       } catch (err) {
         e.target.querySelector(".error").textContent = err.message;
+      } finally {
+        button.disabled = false;
       }
     };
+    document.querySelectorAll("[data-attachment]").forEach((button) => {
+      button.onclick = async () => {
+        button.disabled = true;
+        try {
+          const file = state.data.feedback_attachments.find((item) => item.id === Number(button.dataset.attachment));
+          const { signedUrl } = await api("attachment", file);
+          const link = document.createElement("a");
+          link.href = signedUrl;
+          link.download = file.name;
+          link.click();
+        } catch (error) { toast(error.message); }
+        finally { button.disabled = false; }
+      };
+    });
     if (manager) {
       mountAssignmentAnalysis(
         document.querySelector("#assignment-analysis"),

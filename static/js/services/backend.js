@@ -64,7 +64,7 @@ export async function api(path, body) {
         { code: "PROFILE_REQUIRED" },
       );
     }
-    const tables = ["employees", "teams", "members", "assignments", "feedback"];
+    const tables = ["employees", "teams", "members", "assignments", "feedback", "feedback_attachments"];
     const values = await Promise.all(tables.map(allRows));
     const data = Object.fromEntries(
       tables.map((table, i) => [table, values[i]]),
@@ -132,15 +132,33 @@ export async function api(path, body) {
         .select("id")
         .single(),
     );
-  if (path === "feedback")
-    return result(
-      client.from("feedback").insert({
-        assignment_id: body.assignment_id,
-        parent_id: body.parent_id || null,
-        body: body.body,
-        author_id: session.user.id,
-      }),
-    );
+  if (path === "attachment")
+    return result(client.storage.from("feedback-files").createSignedUrl(body.path, 60, { download: body.name }));
+  if (path === "feedback") {
+    const files = (body.files || []).filter((file) => file.size > 0);
+    if (files.length > 10 || files.some((file) => file.size > 20 * 1024 * 1024))
+      throw new Error("Attach up to 10 files, each no larger than 20 MB.");
+    const uploaded = [];
+    try {
+      for (const file of files) {
+        const path = `${session.user.id}/${body.assignment_id}/${crypto.randomUUID()}`;
+        await result(client.storage.from("feedback-files").upload(path, file, {
+          contentType: file.type || "application/octet-stream",
+          upsert: false,
+        }));
+        uploaded.push({ path, name: file.name, size: file.size, content_type: file.type || "application/octet-stream" });
+      }
+      return await result(client.rpc("post_feedback", {
+        target_assignment: body.assignment_id,
+        feedback_body: body.body,
+        reply_to: body.parent_id || null,
+        files: uploaded,
+      }));
+    } catch (error) {
+      if (uploaded.length) await client.storage.from("feedback-files").remove(uploaded.map((file) => file.path));
+      throw error;
+    }
+  }
   throw new Error("Unknown action");
 }
 export function onSignedOut(callback) {

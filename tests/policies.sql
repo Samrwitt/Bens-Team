@@ -55,10 +55,34 @@ do $$ begin
  if (select status from public.assignments where id=1) <> 'Open' then raise exception 'Employee changed status'; end if;
 end $$;
 insert into public.feedback(assignment_id,parent_id,body) values(1,1,'Allowed employee reply');
+insert into storage.objects(bucket_id,name,metadata) values
+ ('feedback-files','00000000-0000-0000-0000-000000000002/1/test-file','{"size":12}');
+select public.post_feedback(1,'Attached code',null,
+ '[{"name":"sample.js","path":"00000000-0000-0000-0000-000000000002/1/test-file","content_type":"text/javascript","size":12}]');
+do $$ begin
+ if (select count(*) from public.feedback_attachments) <> 1 then raise exception 'Attachment metadata missing'; end if;
+ if (select count(*) from storage.objects) <> 1 then raise exception 'Author cannot download attached file'; end if;
+ delete from storage.objects;
+ if (select count(*) from storage.objects) <> 1 then raise exception 'Linked file deleted'; end if;
+ begin
+  insert into storage.objects(bucket_id,name,metadata) values('feedback-files','00000000-0000-0000-0000-000000000002/2/forbidden','{"size":12}');
+  raise exception 'Unauthorized file upload succeeded';
+ exception when insufficient_privilege then null; end;
+ begin
+  perform public.post_feedback(1,'Must rollback',null,
+   '[{"name":"missing.pdf","path":"00000000-0000-0000-0000-000000000002/1/missing","content_type":"application/pdf","size":12}]');
+  raise exception 'Missing file accepted';
+ exception when raise_exception then
+  if sqlerrm='Missing file accepted' then raise; end if;
+ end;
+ if exists(select 1 from public.feedback where body='Must rollback') then raise exception 'Feedback was not rolled back'; end if;
+end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',true);
 do $$ begin
  if (select count(*) from public.assignments) <> 1 then raise exception 'Other employee isolation failed'; end if;
  if (select count(*) from public.feedback_authors()) <> 0 then raise exception 'Unrelated author names disclosed'; end if;
+ if (select count(*) from public.feedback_attachments) <> 0 then raise exception 'Private attachments disclosed'; end if;
+ if (select count(*) from storage.objects) <> 0 then raise exception 'Private file disclosed'; end if;
  if (select count(*) from public.feedback) <> 0 then raise exception 'Other employee can read private feedback'; end if;
 end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);

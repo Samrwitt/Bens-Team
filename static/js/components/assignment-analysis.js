@@ -21,7 +21,8 @@ export async function mountAssignmentAnalysis(container, assignmentId) {
   container.innerHTML = /* HTML */ `
     <h2>Ask AI</h2>
     <p class="muted">
-      Ask about this assignment and all its feedback and replies.
+      Ask about this assignment and all its text feedback and replies.
+      Uploaded file contents will be included when the final RAG section is implemented.
     </p>
     <p class="analysis-status" role="status">
       ${context.configured
