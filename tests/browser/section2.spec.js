@@ -61,6 +61,7 @@ async function workspace(
   const attachments = image ? [{ id: 1, feedback_id: 1, name: "draft.png", path: `${user.id}/1/draft`, size: 100, content_type: "image/png" }] : [];
   const previews = [];
   const reads = [];
+  const processing = attachments.map(file=>({attachment_id:file.id,status:"queued",error:null}));
   const questions = [],
     writes = [],
     errors = [];
@@ -164,6 +165,7 @@ async function workspace(
         body = null;
       } else body = reads;
     }
+    else if (url.pathname === "/rest/v1/attachment_processing") body = processing;
     else if (url.pathname === "/rest/v1/feedback_attachments") body = attachments;
     else if (url.pathname === "/rest/v1/feedback") body = empty ? [] : feedback;
     else if (url.pathname === "/rest/v1/teams")
@@ -187,7 +189,7 @@ async function workspace(
       exact: true,
     }),
   ).toBeVisible();
-  return { user, questions, writes, errors, previews, feedback };
+  return { user, questions, writes, errors, previews, feedback, processing };
 }
 
 test("employee sees personal and team work, adds feedback and replies, without manager controls", async ({
@@ -435,5 +437,15 @@ test("manager reviews and posts a suggested question as feedback", async ({ page
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
   await expect(page.getByRole("button", { name: "Sent", exact: true })).toBeDisabled();
   expect(feedback).toHaveLength(2);
+  expect(errors).toEqual([]);
+});
+
+test("attachment processing status updates without asking AI", async ({ page }) => {
+  const { processing, questions, errors } = await workspace(page, { image: true });
+  await page.getByText("Prepare the client guide", { exact: true }).click();
+  await expect(page.locator(".attachment-processing")).toHaveText("Processing for AI…");
+  processing[0].status = "ready";
+  await expect(page.locator(".attachment-processing")).toHaveText("Ready for AI", { timeout: 10000 });
+  expect(questions).toEqual([]);
   expect(errors).toEqual([]);
 });

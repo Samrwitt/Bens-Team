@@ -59,8 +59,8 @@ export async function generateAnswer(provider, context, question, fetchImpl, his
   if (typeof answer !== "string" || !answer.trim() || answer.length > 30_000)
     throw new AnalysisError("AI returned no usable answer. Please try again.", 502);
   const references = new Set(context.sources.map((source) => source.reference));
-  const citationGroups = /[\[(]\s*[AF]\d+(?:[\s,;]+[AF]\d+)*\s*[\])]/g;
-  const cited = [...`${answer} ${suggestion || ""}`.matchAll(citationGroups)].flatMap((match) => match[0].match(/[AF]\d+/g));
+  const citationGroups = /[\[(]\s*[AFT]\d+(?:[\s,;]+[AFT]\d+)*\s*[\])]/g;
+  const cited = [...`${answer} ${suggestion || ""}`.matchAll(citationGroups)].flatMap((match) => match[0].match(/[AFT]\d+/g));
   if (cited.some((reference) => !references.has(reference)))
     throw new AnalysisError("AI returned an invalid source reference. Please try again.", 502);
   const clean = (text) => text.replace(citationGroups, "").replace(/[^\S\r\n]+([.,;:!?])/g, "$1").replace(/[^\S\r\n]{2,}/g, " ").trim();

@@ -14,6 +14,8 @@ function fixture(options = {}) {
       { id: 2, auth_user_id: "employee", role: "employee", name: "Alex" },
     ],
     teams: [],
+    feedback_attachments: options.attachments || [],
+    attachment_processing: options.processing || [],
     assignments: [
       {
         id: 1,
@@ -412,4 +414,16 @@ test("structured suggestions are validated and returned without posting feedback
   assert.deepEqual(JSON.parse(f.requests[0].body).response_format, { type: "json_object" });
   const invalid = fixture({ groqKey: "groq-key", fetchImpl: () => groqAnswer(JSON.stringify({ answer: "Drafted.", suggested_feedback: "x".repeat(2001) })) });
   assert.equal((await invalid.call({ assignment_id: 1, question: "Progress?" })).status, 502);
+});
+
+test('analysis reuses saved selected-assignment attachment content and reports unread files',async()=>{
+  const f=fixture({key:'key',attachments:[{id:1,feedback_id:2,name:'progress.pdf'},{id:2,feedback_id:2,name:'photo.png'},{id:3,feedback_id:3,name:'other.txt'}],processing:[{attachment_id:1,status:'ready',extracted_text:'Section 2 is complete.'},{attachment_id:2,status:'queued'},{attachment_id:3,status:'ready',extracted_text:'Private other file.'}]});
+  const result=await f.call({assignment_id:1,question:'Progress?'});
+  assert.equal(result.status,200);
+  assert.deepEqual(result.body.attachment_status,{ready:1,pending:1,failed:0});
+  const prompt=JSON.parse(JSON.parse(f.requests[0].body).contents[0].parts[0].text);
+  assert.ok(prompt.sources.some(source=>source.text.includes('Section 2 is complete.')));
+  assert.ok(prompt.sources.some(source=>source.text.includes('content unavailable')));
+  assert.ok(!JSON.stringify(prompt).includes('Private other file.'));
+  assert.equal(f.requests.length,1);
 });

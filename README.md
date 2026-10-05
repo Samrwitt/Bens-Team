@@ -119,7 +119,17 @@ Verify live manager sign-in, employee creation, team creation, assignment creati
 
 Feedback and replies support up to 10 private file attachments (20 MB each), including images, PDFs, and code. Apply `supabase/migrations/202610030001_feedback_attachments.sql` before using this version. Downloads require assignment access.
 
-RAG is planned as the final section: combine the manager assignment, all feedback/replies, and uploaded file contents for an API LLM or local vector analysis. File extraction and retrieval are not implemented yet; current assignment AI uses only the brief and text feedback.
+Attachment content is processed automatically after feedback attachments are saved. The AI reads stored extracted content with the selected assignment and all feedback/replies; asking a question does not perform extraction.
+
+### Attachment processing
+
+Apply `supabase/migrations/202610050002_attachment_processing.sql` and deploy `process-attachments`. Configure a random `ATTACHMENT_PROCESSING_SECRET` as an Edge Function secret and the same value in Vault under `attachment_processing_secret`. Install `supabase/operations/attachment-processing.sql` after replacing its project URL for another deployment. This enables an asynchronous insert webhook plus a one-minute cron check for queued/retry/stale jobs. Existing attachments are queued by the migration too.
+
+Text/UTF-8 files, PDFs with readable text, and DOCX body text are extracted without LLM requests. PNG, JPEG, WebP, and PDFs with scanned pages use recognition (Groq vision for images, Gemini fallback; scanned PDFs use Gemini). `GROQ_VISION_MODEL` defaults to `qwen/qwen3.8-27b`, separate from the text chat model. Ready results are cached by SHA-256 and extractor version, so identical supported files reuse extraction. The cache is private to server access; users only see processing status for accessible assignments.
+
+The worker processes at most two jobs per invocation with one active extraction globally. Jobs have a two-minute lease, stale-lease recovery, at most three attempts, and delayed retries. Posting feedback does not wait for extraction. Status updates in the open assignment for up to five minutes; reopen or refresh for later changes. Chat answers indicate pending/unreadable files instead of silently pretending to include them.
+
+Limits: uploads remain 20 MB; image/scanned-PDF recognition is limited to 8 MB, PDFs to 50 pages, extracted text to 100,000 characters per file, and combined assignment sources to 200,000 characters. Oversized contexts fail explicitly; no source text is silently truncated. Unsupported, corrupt, or unreadable files remain available for download with an explicit analysis status. DOCX extraction currently includes body text/tables, not embedded pictures. No embedding/vector service is required.
 
 ## Validation
 
@@ -136,3 +146,9 @@ Validation includes production builds, PostgreSQL policy tests, AI-handler tests
 Browser tests use mocked Supabase HTTP responses to check UI wiring; they do not replace live Auth/Edge Function verification after deployment.
 
 Production site: https://bens-workroom.vercel.app. The employee portal was deployed on 2026-10-05. See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment and migration details.
+
+## Current UI previews
+
+Open [previews/index.html](previews/index.html) for 21 real production screenshots, captured after signing in to the actual manager and employee workspaces. Earlier sample-data images are retained separately in [previews/sample-data/index.html](previews/sample-data/index.html).
+
+Capture production pages with `scripts/capture-live-previews.mjs`, supplying `WORKROOM_MANAGER_PASSWORD` and `WORKROOM_EMPLOYEE_PASSWORD` through environment variables. Credentials are not stored in the repository. Local sample captures can be recreated with `scripts/capture-previews.mjs`.

@@ -348,3 +348,5 @@ td strong {
 
 .feedback-count { color: #374151; font-size: 13px; }
 .assignment-title-row .unread-count { color: #234d3d; background: #d5eadf; }
+
+.attachment-processing { display: block; font-size: 11px; margin-top: 4px; }

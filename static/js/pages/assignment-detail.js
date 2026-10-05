@@ -11,6 +11,12 @@ import { toast } from "../components/toast.js";
 import { dialog } from "../components/modal.js";
 import { attachmentPicker, bindAttachmentPickers } from "../components/attachment-picker.js";
 export function createAssignmentDetailPage({ state, refresh, render }) {
+  function processingLabel(file) {
+    const record = (state.data.attachment_processing || []).find(item=>item.attachment_id === file.id);
+    const status = record?.status || "queued";
+    const labels = {queued:"Processing for AI…",processing:"Processing for AI…",ready:"Ready for AI",failed:"Could not read for AI",unsupported:"Not supported for AI"};
+    return `<small class="attachment-processing muted" data-processing="${file.id}" title="${escapeHtml(record?.error || "")}">${labels[status]}</small>`;
+  }
   function thread(items) {
     return [...items].sort((a, b) => new Date(a.created) - new Date(b.created) || a.id - b.id).map((message) => {
       const author = state.data.people.find((person) => person.auth_user_id === message.author_id)?.name || "Workspace member";
@@ -23,8 +29,8 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
           <span class="message-text">${escapeHtml(message.body)}</span>
         </button>
         ${(state.data.feedback_attachments || []).filter((file) => file.feedback_id === message.id).map((file) => file.content_type?.startsWith("image/")
-          ? `<figure class="attachment-preview" data-image-attachment="${file.id}"><p class="muted" role="status">Loading ${escapeHtml(file.name)}…</p><button type="button" class="image-thumbnail" aria-label="Enlarge ${escapeHtml(file.name)}" hidden><img alt="${escapeHtml(file.name)}"></button><figcaption>${escapeHtml(file.name)}</figcaption></figure>`
-          : `<button type="button" class="textbutton" data-attachment="${file.id}">Download ${escapeHtml(file.name)} (${Math.ceil(file.size / 1024)} KB)</button>`).join(" ")}
+          ? `<figure class="attachment-preview" data-image-attachment="${file.id}"><p class="muted" role="status">Loading ${escapeHtml(file.name)}…</p><button type="button" class="image-thumbnail" aria-label="Enlarge ${escapeHtml(file.name)}" hidden><img alt="${escapeHtml(file.name)}"></button><figcaption>${escapeHtml(file.name)}${processingLabel(file)}</figcaption></figure>`
+          : `<button type="button" class="textbutton" data-attachment="${file.id}">Download ${escapeHtml(file.name)} (${Math.ceil(file.size / 1024)} KB)</button>${processingLabel(file)}`).join(" ")}
         <div class="message-actions" hidden><button type="button" class="textbutton" data-reply="${message.id}">↩ Reply</button></div>
       </article>`;
     }).join("");
@@ -117,6 +123,29 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
         </div>`,
     );
     bindAttachmentPickers(document.querySelector("#feedback"));
+    const processingNodes = [...document.querySelectorAll("[data-processing]")];
+    let statusPolls = 0;
+    async function pollProcessing() {
+      if (!processingNodes.some(node=>node.isConnected) || statusPolls++ >= 60) return;
+      const pending = processingNodes.filter(node=>!['ready','failed','unsupported'].includes((state.data.attachment_processing || []).find(item=>item.attachment_id === Number(node.dataset.processing))?.status));
+      if (!pending.length) return;
+      try {
+        const ids = pending.map(node=>Number(node.dataset.processing));
+        const records = [];
+        for (let start=0;start<ids.length;start+=100) records.push(...await api("attachment-status",{ids:ids.slice(start,start+100)}));
+        if (!processingNodes.some(node=>node.isConnected)) return;
+        state.data.attachment_processing ||= [];
+        for (const record of records) {
+          const index = state.data.attachment_processing.findIndex(item=>item.attachment_id === record.attachment_id);
+          if (index>=0) state.data.attachment_processing[index]=record; else state.data.attachment_processing.push(record);
+          const node = processingNodes.find(item=>Number(item.dataset.processing) === record.attachment_id);
+          if (node) { const file = state.data.feedback_attachments.find(item=>item.id === record.attachment_id); const template = document.createElement("template"); template.innerHTML = processingLabel(file); node.textContent = template.content.firstChild.textContent; node.title = record.error || ""; }
+        }
+      } catch { /* Keep current status; extraction is independent of this page. */ }
+      if (processingNodes.some(node=>node.isConnected)) setTimeout(pollProcessing,5000);
+    }
+    setTimeout(pollProcessing,5000);
+
     if (manager) {
       const workspace = state.data;
       const employeeIds = new Set(workspace.employees.map((person) => person.auth_user_id));
@@ -214,7 +243,6 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
           body: new FormData(e.target).get("body"),
         });
         await refresh();
-        toast("Feedback added");
       } catch (err) {
         e.target.querySelector(".error").textContent = err.message;
       } finally {

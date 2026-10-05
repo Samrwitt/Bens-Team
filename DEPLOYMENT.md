@@ -15,7 +15,7 @@ Never upload `.env.local` or account credentials. Only the two public `VITE_` va
 
 ## Employee portal deployed (2026-10-05)
 
-The employee portal is live at https://bens-workroom.vercel.app. Production deployment: `dpl_jy4i2B3rXS6EaFHVPxXw1PTBrCJT`.
+The employee portal is live at https://bens-workroom.vercel.app. Production deployment: `dpl_C5esor4ZerzUqWdL2sD8YzyA8mCb`.
 
 - Applied `202609300001_feedback_authors.sql`.
 - Verified the existing attachment bucket, table, policies, and `post_feedback` function match `202610030001_feedback_attachments.sql`; repaired its missing migration history entry.
@@ -73,3 +73,13 @@ AI suggestion controls: send-to-feedback text replaced with an accessible send-a
 Inset AI send control and message count contrast: suggested question send arrow sits inside its input border. Feedback heading totals and manager unread badges use darker colors; manager unread clearing remains intact. Build and nine browser tests passed; production bundle verified.
 
 Employee message count: assignment rows now display total visible feedback messages for employees when nonzero, using the same dark badge. Manager unread counts retain their existing read-clearing behavior. Build and nine browser tests passed; production verified.
+
+Background attachment extraction (2026-10-05): applied and recorded 202610050002_attachment_processing.sql; deployed process-attachments and analyze-assignment. Dedicated random worker credential stored server-side and in Vault. Installed pg_net/pg_cron upload dispatch and one-minute queue retry through supabase/operations/attachment-processing.sql. Existing attachments queued automatically.
+
+Text, readable PDFs, and DOCX body content use local extraction. Image/scanned PDF recognition uses configured provider credentials; images prefer the verified available Groq qwen/qwen3.8-27b vision model, with Gemini fallback. Successful results are privately cached by versioned SHA-256. One active extraction globally, two jobs per invocation, two-minute leases, delayed retries, and three-attempt maximum bound background usage. Questions retrieve saved selected-assignment file content, with pending/failure coverage reported explicitly.
+
+Verification: production build, 24 backend/database tests, and ten browser tests passed. Live synthetic text/PDF/DOCX uploads became ready without an AI question; temporary assignment/files/cache entries removed afterward. Existing image attachments have begun processing (two ready, one queued for a provider-busy retry at verification). Frontend bundle verified. fflate upgraded to patched 0.8.3; dependency audit reported zero vulnerabilities. Size/page/context limits and DOCX embedded-picture limitation documented in README.md.
+
+Live previews: redeployed Vercel and captured 16 manager pages from production with existing records and a real AI answer. Previous sample images archived separately. Employee production captures pending valid credentials; both supplied passwords were rejected.
+
+Employee live previews completed: corrected employee credentials worked. All 21 production captures are saved in previews with refreshed manager/employee/AI galleries. No forms were saved and no feedback was posted during capture. Earlier sample screenshots remain separately labeled in previews/sample-data.

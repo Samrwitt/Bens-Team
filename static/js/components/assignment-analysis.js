@@ -27,6 +27,11 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
     text.className = role === "assistant" ? "analysis-answer" : "ai-question";
     text.textContent = content;
     bubble.append(label, text);
+    if (message.attachment_status?.pending || message.attachment_status?.failed) {
+      const note = document.createElement("small");
+      note.textContent = [message.attachment_status.pending ? `${message.attachment_status.pending} attachment(s) still processing` : "", message.attachment_status.failed ? `${message.attachment_status.failed} attachment(s) could not be read` : ""].filter(Boolean).join(" · ");
+      bubble.append(note);
+    }
     if (role === "assistant" && message.suggested_feedback) {
       const draft = document.createElement("textarea");
       draft.className = "ai-feedback-draft";
@@ -100,6 +105,7 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
     thinking?.remove();
     thinking = addMessage("assistant", "Thinking…");
     thinking.classList.add("ai-thinking");
+    thinking.querySelector("p").className = "ai-thinking-text";
     button.disabled = true;
     input.disabled = true;
     button.textContent = "Thinking…";
@@ -114,6 +120,7 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
         container.querySelector(".analysis-status").hidden = false;
       } else {
         const message = { role: "assistant", content: answer.answer, suggested_feedback: answer.suggested_feedback };
+        message.attachment_status = answer.attachment_status;
         messages.push({ role: "user", content: question }, message);
         container.querySelector(".analysis-status").hidden = true;
         pending = null;

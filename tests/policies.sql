@@ -74,6 +74,23 @@ select public.post_feedback(1,'Attached code',null,
  '[{"name":"sample.js","path":"00000000-0000-0000-0000-000000000002/1/test-file","content_type":"text/javascript","size":12}]');
 do $$ begin
  if (select count(*) from public.feedback_attachments) <> 1 then raise exception 'Attachment metadata missing'; end if;
+ if (select count(attachment_id) from public.attachment_processing) <> 1 then raise exception 'Upload was not queued'; end if;
+ begin
+  perform extracted_text from public.attachment_processing;
+  raise exception 'Employee read server-only extraction';
+ exception when insufficient_privilege then null; end;
+ begin
+  update public.attachment_processing set status='ready';
+  raise exception 'Employee changed processing state';
+ exception when insufficient_privilege then null; end;
+ begin
+  perform * from public.claim_attachment_job();
+  raise exception 'Employee started paid processing';
+ exception when insufficient_privilege then null; end;
+ begin
+  perform * from public.attachment_content_cache;
+  raise exception 'Employee read global cache';
+ exception when insufficient_privilege then null; end;
  if (select count(*) from storage.objects) <> 1 then raise exception 'Author cannot download attached file'; end if;
  delete from storage.objects;
  if (select count(*) from storage.objects) <> 1 then raise exception 'Linked file deleted'; end if;
@@ -95,6 +112,7 @@ do $$ begin
  if (select count(*) from public.assignments) <> 1 then raise exception 'Other employee isolation failed'; end if;
  if (select count(*) from public.feedback_authors()) <> 0 then raise exception 'Unrelated author names disclosed'; end if;
  if (select count(*) from public.feedback_attachments) <> 0 then raise exception 'Private attachments disclosed'; end if;
+ if (select count(attachment_id) from public.attachment_processing) <> 0 then raise exception 'Private processing state disclosed'; end if;
  if (select count(*) from storage.objects) <> 0 then raise exception 'Private file disclosed'; end if;
  if (select count(*) from public.feedback) <> 0 then raise exception 'Other employee can read private feedback'; end if;
 end $$;
@@ -118,6 +136,20 @@ do $$ begin
   perform * from public.assignments;
   raise exception 'Anonymous read succeeded';
  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+do $$ declare first_job public.attachment_processing; second_job public.attachment_processing;
+begin
+ select * into first_job from public.claim_attachment_job();
+ if first_job.status <> 'processing' or first_job.attempts <> 1 then raise exception 'Job not claimed'; end if;
+ select * into second_job from public.claim_attachment_job();
+ if second_job.attachment_id is not null then raise exception 'Concurrent extraction limit failed'; end if;
+ update public.attachment_processing set lease_until=now()-interval '1 minute';
+ select * into second_job from public.claim_attachment_job();
+ if second_job.attempts <> 2 or second_job.lease_token=first_job.lease_token then raise exception 'Stale lease not recovered'; end if;
+ update public.attachment_processing set lease_until=now()-interval '1 minute',attempts=3;
+ perform * from public.claim_attachment_job();
+ if (select status from public.attachment_processing limit 1) <> 'failed' then raise exception 'Retry limit not enforced'; end if;
 end $$;
 rollback;
 \echo All authorization and relational integrity checks passed.

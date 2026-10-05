@@ -13,8 +13,8 @@ async function allRows(table) {
   for (let start = 0; ; start += 500) {
     let query = client
       .from(table)
-      .select("*")
-      .order(table === "members" ? "team_id" : table === "feedback_reads" ? "feedback_id" : "id");
+      .select(table === "attachment_processing" ? "attachment_id,status,error,updated_at" : "*")
+      .order(table === "attachment_processing" ? "attachment_id" : table === "members" ? "team_id" : table === "feedback_reads" ? "feedback_id" : "id");
     if (table === "members") query = query.order("employee_id");
     const page = await result(query.range(start, start + 499));
     rows.push(...page);
@@ -64,7 +64,7 @@ export async function api(path, body) {
         { code: "PROFILE_REQUIRED" },
       );
     }
-    const tables = ["employees", "teams", "members", "assignments", "feedback", "feedback_attachments"];
+    const tables = ["employees", "teams", "members", "assignments", "feedback", "feedback_attachments", "attachment_processing"];
     const values = await Promise.all(tables.map(allRows));
     const data = Object.fromEntries(
       tables.map((table, i) => [table, values[i]]),
@@ -86,6 +86,7 @@ export async function api(path, body) {
     );
     return data;
   }
+  if (path === "attachment-status") return result(client.from("attachment_processing").select("attachment_id,status,error,updated_at").in("attachment_id",body.ids));
   if (path === "analysis") return invokeFunction("analyze-assignment", body);
   if (path === "read-feedback") {
     if (!body.ids.length) return;

@@ -7,3 +7,7 @@ verify_jwt = false
 [functions.analyze-assignment]
 # The handler verifies the JWT through Auth.getUser and checks the manager role.
 verify_jwt = false
+
+[functions.process-attachments]
+# Database webhook/cron uses a dedicated secret; no user can trigger paid work directly.
+verify_jwt = false
