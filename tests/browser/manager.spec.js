@@ -69,10 +69,13 @@ test("manager signs in and uses Supabase-backed UI actions", async ({
     else if (req.method() === "POST" || req.method() === "PATCH") {
       const data = req.postDataJSON();
       writes.push({ path: url.pathname, data });
-      if (url.pathname === "/rest/v1/feedback")
+      if (url.pathname === "/rest/v1/rpc/post_feedback")
         feedback.push({
           id: feedback.length + 1,
-          parent_id: null,
+          assignment_id: data.target_assignment,
+          body: data.feedback_body,
+          parent_id: data.reply_to,
+          author_id: user.id,
           created: new Date().toISOString(),
           ...data,
         });
@@ -125,7 +128,7 @@ test("manager signs in and uses Supabase-backed UI actions", async ({
     writes.find((w) => w.path === "/functions/v1/manage-employee").data.action,
   ).toBe("create");
   expect(
-    writes.filter((w) => w.path === "/rest/v1/feedback")[1].data.parent_id,
+    writes.filter((w) => w.path === "/rest/v1/rpc/post_feedback")[1].data.reply_to,
   ).toBe(1);
   await page.getByRole("button", { name: "Reset password" }).click();
   await page.getByLabel("New password").fill("replacement-password-123");

@@ -135,4 +135,4 @@ Validation includes production builds, PostgreSQL policy tests, AI-handler tests
 
 Browser tests use mocked Supabase HTTP responses to check UI wiring; they do not replace live Auth/Edge Function verification after deployment.
 
-Existing production site: https://bens-workroom.vercel.app. Section 2 changes are prepared locally; see [SECTION2.md](SECTION2.md) before deploying. See DEPLOYMENT.md for the existing project details.
+Production site: https://bens-workroom.vercel.app. The employee portal was deployed on 2026-10-05. See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment and migration details.

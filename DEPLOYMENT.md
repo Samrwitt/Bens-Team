@@ -13,6 +13,14 @@ Supabase project: `ubjqmdvjttkufcfeyfyw` (Ben's Project).
 
 Never upload `.env.local` or account credentials. Only the two public `VITE_` values belong in Vercel build configuration.
 
-## Section 2 upgrade (prepared locally)
+## Employee portal deployed (2026-10-05)
 
-The employee portal and assignment AI analysis require the new `202609300001_feedback_authors.sql` migration, the `analyze-assignment` Edge Function, and a frontend redeploy. They have not been deployed by this task. Follow [SECTION2.md](SECTION2.md). Gemini can be connected afterward with the server-only `GEMINI_API_KEY` secret.
+The employee portal is live at https://bens-workroom.vercel.app. Production deployment: `dpl_4hiFZkM6gbdeU2CnSJG3yrKVeUQy`.
+
+- Applied `202609300001_feedback_authors.sql`.
+- Verified the existing attachment bucket, table, policies, and `post_feedback` function match `202610030001_feedback_attachments.sql`; repaired its missing migration history entry.
+- Deployed the `analyze-assignment` Edge Function and updated frontend.
+- Verified the public homepage and bundle return HTTP 200, include the employee portal, and omit the old manager-only login rejection.
+- All eight backend tests and five browser tests passed, including employee sign-in and manager permissions.
+
+Gemini can be connected with the server-only `GEMINI_API_KEY` secret; its configuration was not checked during this deployment.

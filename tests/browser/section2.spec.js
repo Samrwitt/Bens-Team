@@ -111,14 +111,17 @@ async function workspace(
     } else if (url.pathname === "/rest/v1/rpc/feedback_authors")
       body = [{ auth_user_id: "manager", name: "Manager" }];
     else if (
-      url.pathname === "/rest/v1/feedback" &&
+      url.pathname === "/rest/v1/rpc/post_feedback" &&
       request.method() === "POST"
     ) {
       const input = request.postDataJSON();
       writes.push(input);
       feedback.push({
         id: feedback.length + 1,
-        parent_id: null,
+        assignment_id: input.target_assignment,
+        body: input.feedback_body,
+        parent_id: input.reply_to,
+        author_id: user.id,
         created: "2026-09-30T10:00:00Z",
         ...input,
       });
@@ -193,11 +196,11 @@ test("employee sees personal and team work, adds feedback and replies, without m
   await expect(
     page.getByText("The checklist is included.", { exact: true }),
   ).toBeVisible();
-  expect(writes[0]).toMatchObject({ assignment_id: 1, author_id: user.id });
+  expect(writes[0]).toMatchObject({ target_assignment: 1, files: [] });
   expect(writes[1]).toMatchObject({
-    assignment_id: 1,
-    parent_id: 1,
-    author_id: user.id,
+    target_assignment: 1,
+    reply_to: 1,
+    files: [],
   });
   expect(questions).toHaveLength(0);
   await page.setViewportSize({ width: 390, height: 844 });
