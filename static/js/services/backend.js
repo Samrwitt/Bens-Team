@@ -133,7 +133,7 @@ export async function api(path, body) {
         .single(),
     );
   if (path === "attachment")
-    return result(client.storage.from("feedback-files").createSignedUrl(body.path, 60, { download: body.name }));
+    return result(client.storage.from("feedback-files").createSignedUrl(body.path, 3600, body.preview ? {} : { download: body.name }));
   if (path === "feedback") {
     const files = (body.files || []).filter((file) => file.size > 0);
     if (files.length > 10 || files.some((file) => file.size > 20 * 1024 * 1024))

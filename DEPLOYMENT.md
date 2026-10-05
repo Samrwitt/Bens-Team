@@ -15,7 +15,7 @@ Never upload `.env.local` or account credentials. Only the two public `VITE_` va
 
 ## Employee portal deployed (2026-10-05)
 
-The employee portal is live at https://bens-workroom.vercel.app. Production deployment: `dpl_4hiFZkM6gbdeU2CnSJG3yrKVeUQy`.
+The employee portal is live at https://bens-workroom.vercel.app. Production deployment: `dpl_CkQgb7pvGnQP9gQUyip7KyMevXe4`.
 
 - Applied `202609300001_feedback_authors.sql`.
 - Verified the existing attachment bucket, table, policies, and `post_feedback` function match `202610030001_feedback_attachments.sql`; repaired its missing migration history entry.
@@ -24,3 +24,16 @@ The employee portal is live at https://bens-workroom.vercel.app. Production depl
 - All eight backend tests and five browser tests passed, including employee sign-in and manager permissions.
 
 Gemini can be connected with the server-only `GEMINI_API_KEY` secret; its configuration was not checked during this deployment.
+
+### Workspace interface update (2026-10-05)
+
+- Image attachments display inline using private signed URLs; other attachments retain download buttons.
+- The manager assignment list shows employee update counts and latest reply previews. Use Refresh updates to fetch new replies.
+- Ask AI opens an assignment-specific popup and loads sources on demand.
+- The feedback composer includes a ✨ Ask AI icon and a 📎 attachment button. Replies also use the attachment button; selected filenames display beside it.
+- Managers can change status directly in the assignment list; employees retain read-only status displays.
+- Production build and all eight browser tests passed. Public homepage and bundle verified to contain all four changes.
+
+Feedback layout refinement: attachment and AI icons sit inside the feedback input area; reply attachment controls also sit inside their input area. The AI popup uses an × close icon and concise text. All eight browser tests passed and the production bundle was verified.
+
+Image preview refinement: attachments display as 160 × 110 thumbnails. Clicking opens a viewport-sized image dialog with ×, Escape, and backdrop dismissal. All eight browser tests passed, including thumbnail sizing and opening/closing the viewer.

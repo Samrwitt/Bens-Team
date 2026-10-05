@@ -1,6 +1,7 @@
 import { state } from "../state.js";
 import { api } from "../services/backend.js";
 import { toast } from "./toast.js";
+import { bindAttachmentPickers } from "./attachment-picker.js";
 export const dialog = document.querySelector("#dialog");
 export function createModal(refresh) {
   function modal(title, fields, endpoint, transform = (x) => x) {
@@ -9,6 +10,8 @@ export function createModal(refresh) {
       (endpoint !== "feedback" && state.data.profile.role !== "manager")
     )
       return;
+    dialog.oncancel = null;
+    dialog.removeAttribute("aria-label");
     dialog.innerHTML = /* HTML */ `<h2>${title}</h2>
       <form>
         ${fields}
@@ -20,6 +23,7 @@ export function createModal(refresh) {
         </div>
       </form>`;
     dialog.showModal();
+    bindAttachmentPickers(dialog);
     dialog.querySelector("form").onsubmit = async (e) => {
       e.preventDefault();
       const button = e.target.querySelector("button:last-child");

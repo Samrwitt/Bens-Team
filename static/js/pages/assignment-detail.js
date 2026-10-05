@@ -8,6 +8,8 @@ import {
 import { shell, heading } from "../components/layout.js";
 import { api } from "../services/backend.js";
 import { toast } from "../components/toast.js";
+import { dialog } from "../components/modal.js";
+import { attachmentPicker, bindAttachmentPickers } from "../components/attachment-picker.js";
 export function createAssignmentDetailPage({ state, refresh, render }) {
   function thread(items, parent = null) {
     return items
@@ -25,13 +27,10 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
               · ${escapeHtml(new Date(f.created).toLocaleString())}</small
             >
             <p>${escapeHtml(f.body)}</p>
-            ${(state.data.feedback_attachments || []).filter((file) => file.feedback_id === f.id).map((file) => `<button type="button" class="textbutton" data-attachment="${file.id}">Download ${escapeHtml(file.name)} (${Math.ceil(file.size / 1024)} KB)</button>`).join(" ")}
-            <button
-              class="textbutton"
-              onclick="feedbackForm(${f.assignment_id},${f.id})"
-            >
-              Reply</button
-            >${thread(items, f.id)}
+            ${(state.data.feedback_attachments || []).filter((file) => file.feedback_id === f.id).map((file) => file.content_type?.startsWith("image/")
+              ? `<figure class="attachment-preview" data-image-attachment="${file.id}"><p class="muted" role="status">Loading ${escapeHtml(file.name)}…</p><button type="button" class="image-thumbnail" aria-label="Enlarge ${escapeHtml(file.name)}" hidden><img alt="${escapeHtml(file.name)}"></button><figcaption>${escapeHtml(file.name)}</figcaption></figure>`
+              : `<button type="button" class="textbutton" data-attachment="${file.id}">Download ${escapeHtml(file.name)} (${Math.ceil(file.size / 1024)} KB)</button>`).join(" ")}
+            ${thread(items, f.id)}
           </div>`,
       )
       .join("");
@@ -58,9 +57,6 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
               <h2>Assignment brief</h2>
               <p class="description">${escapeHtml(a.description)}</p>
             </div>
-            ${manager
-              ? '<div class="panel" id="assignment-analysis"></div>'
-              : ""}
             <div class="panel">
               <h2>
                 Feedback
@@ -75,17 +71,24 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
               '<p class="muted">No feedback yet. Start the conversation below.</p>'}
               <form class="composer" id="feedback">
                 <label for="body">Add feedback</label
-                ><textarea
+                ><div class="feedback-input"><textarea
                   id="body"
                   name="body"
                   placeholder="Share guidance or ask for an update…"
                   required
                 ></textarea>
-                <label for="feedback-files">Attachments</label>
-                <input id="feedback-files" name="files" type="file" multiple>
-                <small class="muted">Up to 10 files, 20 MB each. Images, PDFs, code, and other files.</small>
+                <div class="composer-actions">
+                  ${attachmentPicker("feedback-files")}
+                </div></div>
                 <div class="error" role="alert"></div>
-                <button>Post feedback</button>
+                <div class="feedback-footer">
+                  ${feedback.length ? `<select id="reply-to" name="parent_id" aria-label="Reply to message"><option value="">New message</option>${feedback.map((message) => {
+                    const author = state.data.people.find((person) => person.auth_user_id === message.author_id)?.name || "Workspace member";
+                    return `<option value="${message.id}">${escapeHtml(author)}: ${escapeHtml(message.body.slice(0, 90))}</option>`;
+                  }).join("")}</select>` : ""}
+                  ${manager ? '<button type="button" class="secondary attachment-button" id="open-analysis" aria-label="Ask AI" title="Ask AI"><span aria-hidden="true">✨</span></button>' : ""}
+                  <button type="submit" class="post-feedback">Post feedback</button>
+                </div>
               </form>
             </div>
           </section>
@@ -125,13 +128,61 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
           </section>
         </div>`,
     );
+    bindAttachmentPickers(document.querySelector("#feedback"));
+    const replyTo = document.querySelector("#reply-to");
+    if (replyTo) replyTo.onchange = () => {
+      const replying = Boolean(replyTo.value);
+      document.querySelector('label[for="body"]').textContent = replying ? "Your reply" : "Add feedback";
+      document.querySelector(".post-feedback").textContent = replying ? "Post reply" : "Post feedback";
+      document.querySelector("#body").focus();
+    };
+    document.querySelectorAll("[data-image-attachment]").forEach(async (figure) => {
+      const file = state.data.feedback_attachments.find((item) => item.id === Number(figure.dataset.imageAttachment));
+      const message = figure.querySelector("p");
+      const img = figure.querySelector("img");
+      const thumbnail = figure.querySelector(".image-thumbnail");
+      thumbnail.onclick = () => {
+        const viewer = document.createElement("dialog");
+        viewer.className = "image-viewer";
+        viewer.setAttribute("aria-label", file.name);
+        viewer.innerHTML = '<button type="button" class="popup-close" aria-label="Close image">×</button><img><p></p>';
+        viewer.querySelector("img").src = img.src;
+        viewer.querySelector("img").alt = file.name;
+        viewer.querySelector("p").textContent = file.name;
+        viewer.querySelector("button").onclick = () => viewer.close();
+        viewer.onclose = () => viewer.remove();
+        viewer.onclick = (event) => { if (event.target === viewer) viewer.close(); };
+        document.body.append(viewer);
+        viewer.showModal();
+      };
+      const failed = () => {
+        if (!figure.isConnected) return;
+        message.textContent = "Image could not load. ";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "textbutton";
+        retry.textContent = "Try again";
+        retry.onclick = () => detail(id);
+        message.append(retry);
+        message.hidden = false;
+        thumbnail.hidden = true;
+      };
+      try {
+        const { signedUrl } = await api("attachment", { ...file, preview: true });
+        if (!figure.isConnected) return;
+        img.onload = () => { message.hidden = true; thumbnail.hidden = false; };
+        img.onerror = failed;
+        img.src = signedUrl;
+      } catch { failed(); }
+    });
     document.querySelector("#feedback").onsubmit = async (e) => {
       e.preventDefault();
-      const button = e.target.querySelector("button");
+      const button = e.target.querySelector('button[type="submit"]');
       button.disabled = true;
       try {
         await api("feedback", {
           assignment_id: id,
+          parent_id: replyTo?.value ? Number(replyTo.value) : null,
           files: Array.from(e.target.elements.files.files),
           body: new FormData(e.target).get("body"),
         });
@@ -158,10 +209,15 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
       };
     });
     if (manager) {
-      mountAssignmentAnalysis(
-        document.querySelector("#assignment-analysis"),
-        id,
-      );
+      document.querySelector("#open-analysis").onclick = () => {
+        dialog.innerHTML = `<button type="button" class="popup-close" id="close-analysis" aria-label="Close" title="Close">×</button><div id="assignment-analysis"></div>`;
+        dialog.setAttribute("aria-label", `Ask AI · ${a.title}`);
+        dialog.showModal();
+        const close = () => { dialog.close(); dialog.innerHTML = ""; dialog.removeAttribute("aria-label"); dialog.oncancel = null; };
+        dialog.querySelector("#close-analysis").onclick = close;
+        dialog.oncancel = (event) => { event.preventDefault(); close(); };
+        mountAssignmentAnalysis(dialog.querySelector("#assignment-analysis"), id);
+      };
       document.querySelector("#status").onchange = async (e) => {
         try {
           await api("status", {

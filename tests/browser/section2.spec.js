@@ -7,6 +7,9 @@ async function workspace(
     configured = false,
     empty = false,
     failFirst = false,
+    employeeReply = false,
+    image = false,
+    failStatus = false,
   } = {},
 ) {
   const user = {
@@ -54,6 +57,9 @@ async function workspace(
       created: "2026-09-30T09:00:00Z",
     },
   ];
+  if (employeeReply) feedback.push({ id: 2, assignment_id: 1, parent_id: 1, author_id: "employee", body: "The employee draft is ready.", created: "2026-10-05T09:00:00Z" });
+  const attachments = image ? [{ id: 1, feedback_id: 1, name: "draft.png", path: `${user.id}/1/draft`, size: 100, content_type: "image/png" }] : [];
+  const previews = [];
   const questions = [],
     writes = [],
     errors = [];
@@ -108,6 +114,12 @@ async function workspace(
               }
             : {}),
         };
+    } else if (url.pathname.startsWith("/storage/v1/object/sign/") && request.method() === "POST") {
+      previews.push(request.postDataJSON());
+      body = { signedURL: "/object/sign/feedback-files/draft.png?token=preview" };
+    } else if (url.pathname === "/storage/v1/object/sign/feedback-files/draft.png") {
+      await route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64") });
+      return;
     } else if (url.pathname === "/rest/v1/rpc/feedback_authors")
       body = [{ auth_user_id: "manager", name: "Manager" }];
     else if (
@@ -130,7 +142,21 @@ async function workspace(
       body = url.searchParams.has("auth_user_id") ? profile : role === 'manager'
         ? [profile, { id: 3, auth_user_id: 'employee', name: 'Sara Ahmed', email: 'sara@example.com', role: 'employee' }, { id: 1, auth_user_id: 'manager', name: 'Manager', email: 'manager@example.com', role: 'manager' }]
         : [profile];
+    else if (url.pathname === "/rest/v1/assignments" && request.method() === "PATCH") {
+      const input = request.postDataJSON();
+      writes.push(input);
+      if (failStatus) {
+        failStatus = false;
+        status = 403;
+        body = { message: "Status update denied." };
+      } else {
+        const assignment = assignments.find((item) => String(item.id) === url.searchParams.get("id")?.replace("eq.", ""));
+        assignment.status = input.status;
+        body = { id: assignment.id };
+      }
+    }
     else if (url.pathname === "/rest/v1/assignments") body = assignments;
+    else if (url.pathname === "/rest/v1/feedback_attachments") body = attachments;
     else if (url.pathname === "/rest/v1/feedback") body = empty ? [] : feedback;
     else if (url.pathname === "/rest/v1/teams")
       body = [{ id: 1, name: "Design" }];
@@ -153,7 +179,7 @@ async function workspace(
       exact: true,
     }),
   ).toBeVisible();
-  return { user, questions, writes, errors };
+  return { user, questions, writes, errors, previews, feedback };
 }
 
 test("employee sees personal and team work, adds feedback and replies, without manager controls", async ({
@@ -176,23 +202,28 @@ test("employee sees personal and team work, adds feedback and replies, without m
     page.getByRole("heading", { name: "My assignments", exact: true }),
   ).toBeVisible();
   await page.getByText("Prepare the client guide", { exact: true }).click();
+  expect(questions).toEqual([]);
   await expect(
     page.getByRole("heading", { name: "Assignment brief" }),
   ).toBeVisible();
   await expect(page.getByText("Manager", { exact: true })).toBeVisible();
   await expect(page.locator("#status")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Ask AI" })).toHaveCount(0);
+  await expect(page.locator("#feedback-files")).toBeHidden();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Attach files", exact: true }).click();
+  await (await chooser).setFiles({ name: "draft.png", mimeType: "image/png", buffer: Buffer.from("draft") });
+  await expect(page.locator("[data-selected-files]")).toHaveText("draft.png");
+  await page.locator("#feedback-files").setInputFiles([]);
   await page.getByLabel("Add feedback").fill("My draft is ready.");
   await page.getByRole("button", { name: "Post feedback" }).click();
   await expect(
     page.getByText("My draft is ready.", { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Reply", exact: true })
-    .first()
-    .click();
+  await expect(page.getByRole("button", { name: "Reply", exact: true })).toHaveCount(0);
+  await page.getByLabel("Reply to message").selectOption("1");
   await page.getByLabel("Your reply").fill("The checklist is included.");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Post reply", exact: true }).click();
   await expect(
     page.getByText("The checklist is included.", { exact: true }),
   ).toBeVisible();
@@ -238,15 +269,18 @@ test("manager can inspect sources before Gemini is connected", async ({
 }) => {
   const { questions, errors } = await workspace(page, { role: "manager" });
   await page.getByText("Prepare the client guide", { exact: true }).click();
+  expect(questions).toEqual([]);
+  await expect(page.locator("#feedback").getByRole("button", { name: "Ask AI", exact: true })).toHaveText("✨");
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
   await expect(
     page.getByText("AI is not connected yet.", { exact: false }),
   ).toBeVisible();
   await expect(page.getByLabel("Your question")).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Ask AI", exact: true }),
+    page.getByRole("dialog").getByRole("button", { name: "Ask AI", exact: true }),
   ).toBeDisabled();
   await page
-    .getByText("Sources: assignment + 1 feedback and replies", { exact: true })
+    .getByText("Sources", { exact: true })
     .click();
   await expect(page.locator(".analysis-source")).toHaveCount(2);
   await expect(page.locator(".analysis-result")).toBeEmpty();
@@ -263,16 +297,17 @@ test("manager asks about one assignment, recovers from errors, and gets safely r
     failFirst: true,
   });
   await page.getByText("Prepare the client guide", { exact: true }).click();
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
   const question = page.getByLabel("Your question");
   await expect(question).toBeEnabled();
   await question.fill("What should happen next?");
-  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Ask AI", exact: true }).click();
   await expect(
     page.getByText("AI could not be reached. Please try again.", {
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Ask AI", exact: true }).click();
   await expect(page.locator(".analysis-answer")).toContainText(
     "The checklist is still needed [F1]",
   );
@@ -281,10 +316,68 @@ test("manager asks about one assignment, recovers from errors, and gets safely r
     assignment_id: 1,
     question: "What should happen next?",
   });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.locator("nav").getByRole("link", { name: "Assignments" }).click();
   await page.getByText("Team review", { exact: true }).click();
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
   await expect(page.getByLabel("Your question")).toBeEmpty();
   await expect(page.locator(".analysis-result")).toBeEmpty();
   expect(questions.at(-1)).toEqual({ assignment_id: 2 });
   expect(errors).toEqual([]);
+});
+
+test("image attachments load inline without starting a download", async ({ page }) => {
+  const { previews, errors } = await workspace(page, { image: true });
+  const downloads = [];
+  page.on("download", (download) => downloads.push(download.suggestedFilename()));
+  await page.getByText("Prepare the client guide", { exact: true }).click();
+  const image = page.getByRole("img", { name: "draft.png" });
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate((element) => element.naturalWidth)).toBeGreaterThan(0);
+  expect(previews).toHaveLength(1);
+  expect(previews[0]).toMatchObject({ expiresIn: 3600 });
+  expect(await image.getAttribute("src")).not.toContain("download=");
+  await expect.poll(() => image.evaluate((element) => element.getBoundingClientRect().width)).toBeLessThanOrEqual(160);
+  await page.getByRole("button", { name: "Enlarge draft.png" }).click();
+  const viewer = page.getByRole("dialog", { name: "draft.png" });
+  await expect(viewer.getByRole("img", { name: "draft.png" })).toBeVisible();
+  await viewer.getByRole("button", { name: "Close image" }).click();
+  await expect(viewer).toHaveCount(0);
+  await page.getByRole("button", { name: "Enlarge draft.png" }).click();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
+  expect(downloads).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("manager sees employee replies on the assignment list and can change status there", async ({ page }) => {
+  const { writes, feedback, errors } = await workspace(page, { role: "manager", employeeReply: true, failStatus: true });
+  const row = page.locator("tr").filter({ has: page.getByText("Prepare the client guide", { exact: true }) });
+  await expect(row.getByText("1 employee update", { exact: true })).toBeVisible();
+  await expect(row.getByText("Sara Ahmed replied", { exact: true })).toBeVisible();
+  await expect(row.getByText("The employee draft is ready.", { exact: true })).toBeVisible();
+  const status = row.getByLabel("Status for Prepare the client guide", { exact: true });
+  await status.selectOption("Done");
+  await expect(page.locator("#toast")).toHaveText("Status update denied.");
+  await expect(status).toHaveValue("In progress");
+  await expect(status).toBeEnabled();
+  await status.selectOption("Done");
+  await expect(status).toHaveValue("Done");
+  await expect(page.locator("#toast")).toHaveText("Status updated");
+  expect(writes).toEqual([{ status: "Done" }, { status: "Done" }]);
+  feedback.push({ id: 3, assignment_id: 1, parent_id: 2, author_id: "employee", body: "The final file is attached.", created: "2026-10-05T10:00:00Z" });
+  await page.getByRole("button", { name: "Refresh updates" }).click();
+  await expect(row.getByText("2 employee updates", { exact: true })).toBeVisible();
+  await expect(row.getByText("The final file is attached.", { exact: true })).toBeVisible();
+  await row.getByRole("link").filter({ hasText: "2 employee updates" }).click();
+  await expect(page.getByRole("heading", { name: "Assignment brief" })).toBeVisible();
+  await expect(page.locator(".reply").getByText("The final file is attached.", { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("employees have no status controls on the assignment list", async ({ page }) => {
+  await workspace(page);
+  await expect(page.locator("[data-status]")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh updates" })).toHaveCount(0);
 });

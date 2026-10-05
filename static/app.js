@@ -53,6 +53,12 @@ async function refresh() {
 }
 function render() {
   if (!state.data) return;
+  if (dialog.querySelector("#assignment-analysis")) {
+    dialog.close();
+    dialog.innerHTML = "";
+    dialog.removeAttribute("aria-label");
+    dialog.oncancel = null;
+  }
   const route = location.hash.slice(1) || "assignments";
   if (route.startsWith("assignment/"))
     return detail(Number(route.split("/")[1]));

@@ -20,14 +20,10 @@ export async function mountAssignmentAnalysis(container, assignmentId) {
 
   container.innerHTML = /* HTML */ `
     <h2>Ask AI</h2>
-    <p class="muted">
-      Ask about this assignment and all its text feedback and replies.
-      Uploaded file contents will be included when the final RAG section is implemented.
-    </p>
-    <p class="analysis-status" role="status">
+    <p class="analysis-status" role="status" ${context.configured ? "hidden" : ""}>
       ${context.configured
-        ? "Ready. Answers use only this assignment’s sources."
-        : "AI is not connected yet. Your assignment sources are ready."}
+        ? ""
+        : "AI is not connected yet."}
     </p>
     <form id="analysis-form">
       <label for="analysis-question">Your question</label>
@@ -51,7 +47,7 @@ export async function mountAssignmentAnalysis(container, assignmentId) {
   const sources = container.querySelector(".source-list");
   function showSources(result) {
     container.querySelector("summary").textContent =
-      `Sources: assignment + ${result.feedback_count} feedback and replies`;
+      "Sources";
     sources.innerHTML = result.sources
       .map(
         (source) => /* HTML */ `
@@ -94,11 +90,12 @@ export async function mountAssignmentAnalysis(container, assignmentId) {
         context.configured = false;
         form.elements.question.disabled = true;
         container.querySelector(".analysis-status").textContent =
-          "AI is not connected yet. Your assignment sources are ready.";
+          "AI is not connected yet.";
+        container.querySelector(".analysis-status").hidden = false;
       } else {
         // Plain text rendering prevents model output from executing HTML or scripts.
         result.innerHTML =
-          '<h3>Answer</h3><p class="analysis-answer"></p><p class="muted analysis-note">AI can make mistakes. Check the sources below. Answers are not saved.</p>';
+          '<p class="analysis-answer"></p>';
         result.querySelector(".analysis-answer").textContent = answer.answer;
       }
     } catch (failure) {
