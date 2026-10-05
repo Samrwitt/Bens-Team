@@ -4,7 +4,7 @@ export function createEmployeeForms({ modal }) {
     modal(
       "Add employee",
       field("Full name", "name") +
-        field("Email / sign-in", "email", "email") +
+        field("Email", "email", "email") +
         field(
           "Initial password",
           "password",

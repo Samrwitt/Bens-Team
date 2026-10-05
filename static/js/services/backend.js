@@ -14,7 +14,7 @@ async function allRows(table) {
     let query = client
       .from(table)
       .select("*")
-      .order(table === "members" ? "team_id" : "id");
+      .order(table === "members" ? "team_id" : table === "feedback_reads" ? "feedback_id" : "id");
     if (table === "members") query = query.order("employee_id");
     const page = await result(query.range(start, start + 499));
     rows.push(...page);
@@ -70,6 +70,7 @@ export async function api(path, body) {
       tables.map((table, i) => [table, values[i]]),
     );
     data.profile = profile;
+    data.feedback_reads = profile.role === "manager" ? await allRows("feedback_reads") : [];
     data.people = data.employees;
     if (profile.role === "employee") {
       const authors = await result(client.rpc("feedback_authors"));
@@ -86,6 +87,13 @@ export async function api(path, body) {
     return data;
   }
   if (path === "analysis") return invokeFunction("analyze-assignment", body);
+  if (path === "read-feedback") {
+    if (!body.ids.length) return;
+    return result(client.from("feedback_reads").upsert(
+      body.ids.map((feedback_id) => ({ manager_id: session.user.id, feedback_id })),
+      { onConflict: "manager_id,feedback_id", ignoreDuplicates: true },
+    ));
+  }
   if (path === "employees")
     return invokeFunction("manage-employee", {
       ...body,

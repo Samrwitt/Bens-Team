@@ -111,7 +111,8 @@ test("manager signs in and uses Supabase-backed UI actions", async ({
   await page.getByLabel("Add feedback").fill("Please review");
   await page.getByRole("button", { name: "Post feedback" }).click();
   await expect(page.getByText("Please review", { exact: true })).toBeVisible();
-  await page.getByLabel("Reply to message").selectOption("1");
+  await page.locator('[data-message="1"] .message-content').click();
+  await page.getByRole("button", { name: "Reply", exact: false }).click();
   await page.getByLabel("Your reply").fill("Follow-up");
   await page.getByRole("button", { name: "Post reply", exact: true }).click();
   await expect(page.getByText("Follow-up", { exact: true })).toBeVisible();
@@ -120,7 +121,7 @@ test("manager signs in and uses Supabase-backed UI actions", async ({
   await page.getByRole("link", { name: "Employees" }).click();
   await page.getByRole("button", { name: "Add employee" }).click();
   await page.getByLabel("Full name").fill("New employee");
-  await page.getByLabel("Email / sign-in").fill("new@example.com");
+  await page.getByLabel("Email").fill("new@example.com");
   await page.getByLabel("Initial password").fill("new-password-123");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator("dialog")).not.toBeVisible();

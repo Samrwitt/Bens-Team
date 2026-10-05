@@ -18,7 +18,7 @@ export function createAssignmentsPage({ state, refresh }) {
           ? "A clear view of what needs to get done."
           : "Work assigned to you and your teams.",
         manager
-          ? '<div class="assignment-actions"><button class="secondary" onclick="refresh()">Refresh updates</button><button onclick="assignmentForm()">＋ New assignment</button></div>'
+          ? '<div class="assignment-actions"><button class="secondary" onclick="refresh()">Refresh</button><button onclick="assignmentForm()">＋ New assignment</button></div>'
           : "",
       ) +
         /* HTML */ `<div class="stats">
@@ -67,16 +67,6 @@ export function createAssignmentsPage({ state, refresh }) {
               </select>
             </div>
             <table>
-              <thead>
-                <tr>
-                  <th>Assignment</th>
-                  <th>Assigned to</th>
-                  <th>Due date</th>
-                  <th>Status</th>
-                  ${manager ? "<th>Employee updates</th>" : ""}
-                  <th></th>
-                </tr>
-              </thead>
               <tbody id="rows"></tbody>
             </table>
           </div> `,
@@ -86,14 +76,12 @@ export function createAssignmentsPage({ state, refresh }) {
   function rows() {
     const manager = state.data.profile.role === "manager";
     const employeeIds = new Set(state.data.employees.map((person) => person.auth_user_id));
+    const readIds = new Set((state.data.feedback_reads || []).map((item) => item.feedback_id));
     function updates(assignment) {
       const messages = state.data.feedback
-        .filter((item) => item.assignment_id === assignment.id && employeeIds.has(item.author_id))
-        .sort((a, b) => new Date(b.created) - new Date(a.created));
-      if (!messages.length) return '<span class="muted">No employee updates</span>';
-      const latest = messages[0];
-      const person = state.data.people.find((item) => item.auth_user_id === latest.author_id);
-      return `<a class="employee-update" href="#assignment/${assignment.id}"><span class="badge progress">${messages.length} employee update${messages.length === 1 ? "" : "s"}</span><strong>${escapeHtml(person?.name || "Employee")}${latest.parent_id ? " replied" : " posted feedback"}</strong><span class="update-preview">${escapeHtml(latest.body)}</span><small class="muted">${escapeHtml(new Date(latest.created).toLocaleString())}</small></a>`;
+        .filter((item) => item.assignment_id === assignment.id && (!manager || (employeeIds.has(item.author_id) && !readIds.has(item.id))));
+      if (!messages.length) return "";
+      return `<a class="badge progress unread-count" href="#assignment/${assignment.id}" aria-label="${messages.length} ${manager ? "unread messages" : "messages"}">${messages.length}</a>`;
     }
     const items = state.data.assignments.filter(
       (a) =>
@@ -106,12 +94,12 @@ export function createAssignmentsPage({ state, refresh }) {
       items
         .map(
           (a) =>
-            /* HTML */ `<tr>
+            /* HTML */ `<tr class="assignment-row" data-assignment="${a.id}" tabindex="0" aria-label="Open ${escapeHtml(a.title)}">
               <td>
-                <a href="#assignment/${a.id}"
+                <div class="assignment-title-row"><a href="#assignment/${a.id}"
                   ><span class="id">${formatAssignmentId(a.id)}</span
                   ><strong>${escapeHtml(a.title)}</strong></a
-                >
+                >${updates(a)}</div>
               </td>
               <td>
                 ${escapeHtml(owner(a, state.data))}
@@ -120,19 +108,23 @@ export function createAssignmentsPage({ state, refresh }) {
                 </div>
               </td>
               <td>${escapeHtml(a.due)}</td>
-              <td>${manager ? `<select data-status="${a.id}" aria-label="Status for ${escapeHtml(a.title)}">${["Open", "In progress", "Done"].map((status) => `<option ${a.status === status ? "selected" : ""}>${status}</option>`).join("")}</select>` : statusBadge(a.status)}</td>
-              ${manager ? `<td>${updates(a)}</td>` : ""}
-              <td>
-                <a
-                  href="#assignment/${a.id}"
-                  aria-label="Open ${formatAssignmentId(a.id)}"
-                  >↗</a
-                >
-              </td>
+              <td data-status-cell>${manager ? `<select data-status="${a.id}" aria-label="Status for ${escapeHtml(a.title)}">${["Open", "In progress", "Done"].map((status) => `<option ${a.status === status ? "selected" : ""}>${status}</option>`).join("")}</select>` : statusBadge(a.status)}</td>
             </tr>`,
         )
         .join("") ||
-      `<tr><td colspan="${manager ? 6 : 5}" class="empty">${manager ? "No assignments found. Create one to get started." : "No assignments found. Try another search or check back with your manager."}</td></tr>`;
+      `<tr><td colspan="4" class="empty">${manager ? "No assignments found. Create one to get started." : "No assignments found. Try another search or check back with your manager."}</td></tr>`;
+    document.querySelectorAll("[data-assignment]").forEach((row) => {
+      const open = () => { location.hash = `assignment/${row.dataset.assignment}`; };
+      row.onclick = (event) => {
+        if (!event.target.closest("a, button, select, input, textarea, [data-status-cell]")) open();
+      };
+      row.onkeydown = (event) => {
+        if (event.target === row && ["Enter", " "].includes(event.key)) {
+          event.preventDefault();
+          open();
+        }
+      };
+    });
     document.querySelectorAll("[data-status]").forEach((select) => {
       select.onchange = async () => {
         const id = Number(select.dataset.status);

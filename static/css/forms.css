@@ -183,3 +183,42 @@ dialog::backdrop {
 .image-viewer .popup-close {
   color: white;
 }
+.composer .feedback-input textarea {
+  min-height: 38px;
+  height: 38px;
+  resize: none;
+  font-size: 14px;
+  padding: 10px 12px;
+}
+.composer .feedback-input .composer-actions {
+  justify-content: flex-end;
+  padding: 4px 8px 8px;
+  gap: 8px;
+}
+.composer .composer-actions .post-feedback {
+  margin: 0;
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.composer .composer-actions .attachment-button {
+  min-width: 38px;
+  min-height: 38px;
+  padding: 6px;
+}
+.composer .selected-files {
+  order: -1;
+  flex: 1 1 100%;
+}
+#open-analysis {
+  color: #505861;
+}
+.ai-sparkle {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.composer .feedback-input { display: flex; align-items: center; }
+.composer .feedback-input textarea { flex: 1; min-width: 0; margin: 0; }
+.composer .feedback-input .composer-actions { flex-shrink: 0; padding: 4px; }

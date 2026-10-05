@@ -4,7 +4,7 @@ The active app is a static Vite frontend backed by Supabase Auth, PostgreSQL, an
 
 Implemented: manager and employee sign-in, employee account creation and password resets, teams, assignments, statuses, feedback and nested replies, and manager-only assignment AI analysis.
 
-**Section 2:** See [SECTION2.md](SECTION2.md) for the employee portal, assignment analysis, deployment steps, and how to connect Gemini later. Without a Gemini key, the analysis panel shows assignment sources without generating answers.
+**Assignment AI:** Configure server-only `GEMINI_API_KEY` / `GEMINI_MODEL` and `GROQ_API_KEY` / `GROQ_MODEL` secrets. With both keys, generation alternates the first provider within each server worker and automatically tries the other if a request fails. With either key, that provider works on its own. Without keys, generation is disabled.
 
 ## Start here: edit the code
 
@@ -20,7 +20,7 @@ The editable application code is directly in this project folder.
 | [static/js/forms/](static/js/forms/) | Add/edit dialogs, grouped by feature |
 | [static/js/components/](static/js/components/) | Shared navigation, headings, dialog, fields, and notifications |
 | [static/js/components/assignment-analysis.js](static/js/components/assignment-analysis.js) | Assignment AI question, answer, and sources |
-| [supabase/functions/analyze-assignment/](supabase/functions/analyze-assignment/) | Authenticated assignment retrieval and Gemini request |
+| [supabase/functions/analyze-assignment/](supabase/functions/analyze-assignment/) | Authenticated assignment retrieval and Gemini/Groq fallback |
 | [static/css/](static/css/) | Base styles, layout, components, forms, and responsive rules |
 | [static/js/services/backend.js](static/js/services/backend.js) | Supabase calls |
 | [static/app.js](static/app.js) | App startup, routing, and action wiring |
@@ -115,7 +115,7 @@ Verify live manager sign-in, employee creation, team creation, assignment creati
 - Team membership changes are transactional. Removing someone from a team removes their access to that team's assignments.
 
 - Employees can see feedback-author names only for assignments they can access. Other profile fields remain private.
-- AI source retrieval and generation require a verified manager session. Gemini credentials remain on the server.
+- AI source retrieval and generation require a verified manager session. Gemini and Groq credentials remain on the server.
 
 Feedback and replies support up to 10 private file attachments (20 MB each), including images, PDFs, and code. Apply `supabase/migrations/202610030001_feedback_attachments.sql` before using this version. Downloads require assignment access.
 

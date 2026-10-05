@@ -60,6 +60,7 @@ async function workspace(
   if (employeeReply) feedback.push({ id: 2, assignment_id: 1, parent_id: 1, author_id: "employee", body: "The employee draft is ready.", created: "2026-10-05T09:00:00Z" });
   const attachments = image ? [{ id: 1, feedback_id: 1, name: "draft.png", path: `${user.id}/1/draft`, size: 100, content_type: "image/png" }] : [];
   const previews = [];
+  const reads = [];
   const questions = [],
     writes = [],
     errors = [];
@@ -109,6 +110,7 @@ async function workspace(
           assignment_id: input.assignment_id,
           ...(input.question && configured
             ? {
+                suggested_feedback: "What remains to finish this assignment?",
                 answer:
                   "The checklist is still needed [F1]. Draft it next [A1]. <img src=x onerror=alert(1)>",
               }
@@ -156,6 +158,12 @@ async function workspace(
       }
     }
     else if (url.pathname === "/rest/v1/assignments") body = assignments;
+    else if (url.pathname === "/rest/v1/feedback_reads") {
+      if (request.method() === "POST") {
+        reads.push(...request.postDataJSON());
+        body = null;
+      } else body = reads;
+    }
     else if (url.pathname === "/rest/v1/feedback_attachments") body = attachments;
     else if (url.pathname === "/rest/v1/feedback") body = empty ? [] : feedback;
     else if (url.pathname === "/rest/v1/teams")
@@ -220,8 +228,18 @@ test("employee sees personal and team work, adds feedback and replies, without m
   await expect(
     page.getByText("My draft is ready.", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reply", exact: true })).toHaveCount(0);
-  await page.getByLabel("Reply to message").selectOption("1");
+  await expect(page.getByLabel("Reply to message")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Reply/ })).toHaveCount(0);
+  await page.locator('[data-message="1"] .message-content').click();
+  await page.getByRole("button", { name: "Reply", exact: false }).click();
+  await expect(page.locator("#reply-preview")).toHaveText("Please include a checklist.");
+  await page.getByLabel("Your reply").fill("The checklist is included.");
+  await page.getByRole("button", { name: "Cancel reply", exact: true }).click();
+  await expect(page.locator("#reply-context")).toBeHidden();
+  await expect(page.getByLabel("Add feedback")).toHaveValue("The checklist is included.");
+  await page.locator('[data-message="1"] .message-content').focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Reply", exact: false }).click();
   await page.getByLabel("Your reply").fill("The checklist is included.");
   await page.getByRole("button", { name: "Post reply", exact: true }).click();
   await expect(
@@ -264,27 +282,22 @@ test("employee empty state does not suggest creating assignments", async ({
   ).toHaveCount(0);
 });
 
-test("manager can inspect sources before Gemini is connected", async ({
+test("AI popup shows connection status without a sources dropdown", async ({
   page,
 }) => {
   const { questions, errors } = await workspace(page, { role: "manager" });
   await page.getByText("Prepare the client guide", { exact: true }).click();
   expect(questions).toEqual([]);
-  await expect(page.locator("#feedback").getByRole("button", { name: "Ask AI", exact: true })).toHaveText("✨");
+  await expect(page.locator(".chat-heading").getByRole("button", { name: "Ask AI", exact: true }).locator("svg")).toHaveCount(1);
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-  await expect(
-    page.getByText("AI is not connected yet.", { exact: false }),
-  ).toBeVisible();
-  await expect(page.getByLabel("Your question")).toBeDisabled();
-  await expect(
-    page.getByRole("dialog").getByRole("button", { name: "Ask AI", exact: true }),
-  ).toBeDisabled();
-  await page
-    .getByText("Sources", { exact: true })
-    .click();
-  await expect(page.locator(".analysis-source")).toHaveCount(2);
-  await expect(page.locator(".analysis-result")).toBeEmpty();
-  expect(questions).toEqual([{ assignment_id: 1 }]);
+  await expect(page.getByLabel("Your question")).toBeEnabled();
+  expect(questions).toEqual([]);
+  await expect(page.locator(".ai-chat")).not.toBeVisible();
+  await page.getByLabel("Your question").fill("How is progress?");
+  await page.getByRole("dialog").getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByText("AI is not connected yet.")).toBeVisible();
+  await expect(page.getByLabel("Your question")).toBeEnabled();
+  await expect(page.locator(".analysis-sources")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -301,13 +314,13 @@ test("manager asks about one assignment, recovers from errors, and gets safely r
   const question = page.getByLabel("Your question");
   await expect(question).toBeEnabled();
   await question.fill("What should happen next?");
-  await page.getByRole("dialog").getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Send", exact: true }).click();
   await expect(
     page.getByText("AI could not be reached. Please try again.", {
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Send", exact: true }).click();
   await expect(page.locator(".analysis-answer")).toContainText(
     "The checklist is still needed [F1]",
   );
@@ -315,7 +328,17 @@ test("manager asks about one assignment, recovers from errors, and gets safely r
   expect(questions.at(-1)).toEqual({
     assignment_id: 1,
     question: "What should happen next?",
+    history: [],
   });
+  await question.fill("Which part should I review first?");
+  await question.press("Enter");
+  await expect(page.locator(".analysis-answer")).toHaveCount(2);
+  await expect(page.locator(".ai-question")).toHaveCount(2);
+  expect(questions.at(-1).history).toHaveLength(2);
+  expect(questions.at(-1).history[0]).toEqual({ role: "user", content: "What should happen next?" });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await expect(page.locator(".analysis-answer")).toHaveCount(2);
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.locator("nav").getByRole("link", { name: "Assignments" }).click();
@@ -323,7 +346,7 @@ test("manager asks about one assignment, recovers from errors, and gets safely r
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
   await expect(page.getByLabel("Your question")).toBeEmpty();
   await expect(page.locator(".analysis-result")).toBeEmpty();
-  expect(questions.at(-1)).toEqual({ assignment_id: 2 });
+  expect(questions.at(-1).assignment_id).toBe(1);
   expect(errors).toEqual([]);
 });
 
@@ -354,9 +377,8 @@ test("image attachments load inline without starting a download", async ({ page 
 test("manager sees employee replies on the assignment list and can change status there", async ({ page }) => {
   const { writes, feedback, errors } = await workspace(page, { role: "manager", employeeReply: true, failStatus: true });
   const row = page.locator("tr").filter({ has: page.getByText("Prepare the client guide", { exact: true }) });
-  await expect(row.getByText("1 employee update", { exact: true })).toBeVisible();
-  await expect(row.getByText("Sara Ahmed replied", { exact: true })).toBeVisible();
-  await expect(row.getByText("The employee draft is ready.", { exact: true })).toBeVisible();
+  await expect(row.locator(".unread-count")).toHaveText("1");
+  await expect(row.getByText("The employee draft is ready.", { exact: true })).toHaveCount(0);
   const status = row.getByLabel("Status for Prepare the client guide", { exact: true });
   await status.selectOption("Done");
   await expect(page.locator("#toast")).toHaveText("Status update denied.");
@@ -367,17 +389,51 @@ test("manager sees employee replies on the assignment list and can change status
   await expect(page.locator("#toast")).toHaveText("Status updated");
   expect(writes).toEqual([{ status: "Done" }, { status: "Done" }]);
   feedback.push({ id: 3, assignment_id: 1, parent_id: 2, author_id: "employee", body: "The final file is attached.", created: "2026-10-05T10:00:00Z" });
-  await page.getByRole("button", { name: "Refresh updates" }).click();
-  await expect(row.getByText("2 employee updates", { exact: true })).toBeVisible();
-  await expect(row.getByText("The final file is attached.", { exact: true })).toBeVisible();
-  await row.getByRole("link").filter({ hasText: "2 employee updates" }).click();
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(row.locator(".unread-count")).toHaveText("2");
+  await row.locator("td").nth(2).click();
   await expect(page.getByRole("heading", { name: "Assignment brief" })).toBeVisible();
   await expect(page.locator(".reply").getByText("The final file is attached.", { exact: true })).toBeVisible();
+  await page.locator("nav").getByRole("link", { name: "Assignments" }).click();
+  await expect(row.locator(".unread-count")).toHaveCount(0);
+  await page.reload();
+  await expect(row.locator(".unread-count")).toHaveCount(0);
+  feedback.push({ id: 4, assignment_id: 1, parent_id: 3, author_id: "employee", body: "A new update.", created: "2026-10-05T11:00:00Z" });
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(row.locator(".unread-count")).toHaveText("1");
+  await expect(row.getByRole("link", { name: "Open ASG-0001" })).toHaveCount(0);
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Assignment brief" })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
 test("employees have no status controls on the assignment list", async ({ page }) => {
   await workspace(page);
   await expect(page.locator("[data-status]")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Refresh updates" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "1 messages", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
+});
+
+test("manager reviews and posts a suggested question as feedback", async ({ page }) => {
+  const { feedback, user, errors } = await workspace(page, { role: "manager", configured: true });
+  await page.getByText("Prepare the client guide", { exact: true }).click();
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByLabel("Your question").fill("How is progress?");
+  await page.getByLabel("Your question").press("Enter");
+  const draft = page.getByLabel("Suggested feedback question");
+  await expect(draft).toHaveValue("What remains to finish this assignment?");
+  expect(feedback).toHaveLength(1);
+  await draft.fill("Please share progress on the remaining sections.");
+  await page.getByRole("button", { name: "Send to feedback", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Sent", exact: true })).toBeDisabled();
+  await expect(page.getByText("Your question has been posted to feedback.")).toBeVisible();
+  expect(feedback).toHaveLength(2);
+  expect(feedback.at(-1)).toMatchObject({ assignment_id: 1, author_id: user.id, body: "Please share progress on the remaining sections." });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".message-text").last()).toHaveText("Please share progress on the remaining sections.");
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Sent", exact: true })).toBeDisabled();
+  expect(feedback).toHaveLength(2);
+  expect(errors).toEqual([]);
 });

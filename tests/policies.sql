@@ -14,6 +14,14 @@ select public.save_team('Design',array[2::bigint],null);
 insert into public.assignments(title,description,employee_id,due) values ('Private A','Brief',2,'2026-10-01'),('Private B','Brief',3,'2026-10-01');
 insert into public.assignments(title,description,team_id,due) values ('Team assignment','Brief',1,'2026-10-01');
 insert into public.feedback(assignment_id,body) values (1,'Manager feedback');
+insert into public.feedback_reads(manager_id,feedback_id) values ('00000000-0000-0000-0000-000000000001',1);
+do $$ begin
+ if (select count(*) from public.feedback_reads) <> 1 then raise exception 'Manager read state missing'; end if;
+ begin
+  insert into public.feedback_reads(manager_id,feedback_id) values ('00000000-0000-0000-0000-000000000002',1);
+  raise exception 'Manager changed another account read state';
+ exception when insufficient_privilege then null; end;
+end $$;
 do $$ begin
   if (select count(*) from public.assignments) <> 3 then raise exception 'Manager should see all assignments'; end if;
   begin
@@ -29,6 +37,11 @@ do $$ begin
  if (select count(*) from public.feedback_authors()) <> 1 then raise exception 'Accessible author names missing'; end if;
  if (select name from public.feedback_authors() limit 1) <> 'Manager' then raise exception 'Wrong author disclosed'; end if;
  if public.is_manager() then raise exception 'Employee became manager'; end if;
+ if (select count(*) from public.feedback_reads) <> 0 then raise exception 'Employee read manager read state'; end if;
+ begin
+  insert into public.feedback_reads(manager_id,feedback_id) values ('00000000-0000-0000-0000-000000000002',1);
+  raise exception 'Employee created manager read state';
+ exception when insufficient_privilege then null; end;
  if (select count(*) from public.assignments) <> 2 then raise exception 'Employee assignment isolation failed'; end if;
  if (select count(*) from public.employees) <> 1 then raise exception 'Employee profile isolation failed'; end if;
  begin
@@ -93,6 +106,10 @@ do $$ begin
 end $$;
 set local role anon;
 do $$ begin
+ begin
+  perform * from public.feedback_reads;
+  raise exception 'Anonymous read state access succeeded';
+ exception when insufficient_privilege then null; end;
  begin
   perform * from public.feedback_authors();
   raise exception 'Anonymous author lookup succeeded';

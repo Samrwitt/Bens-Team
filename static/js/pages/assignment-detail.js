@@ -11,29 +11,23 @@ import { toast } from "../components/toast.js";
 import { dialog } from "../components/modal.js";
 import { attachmentPicker, bindAttachmentPickers } from "../components/attachment-picker.js";
 export function createAssignmentDetailPage({ state, refresh, render }) {
-  function thread(items, parent = null) {
-    return items
-      .filter((f) => f.parent_id === parent)
-      .map(
-        (f) =>
-          /* HTML */ `<div class="${parent ? "reply" : "feedback"}">
-            <strong style="font-size:13px"
-              >${escapeHtml(
-                state.data.people.find((p) => p.auth_user_id === f.author_id)
-                  ?.name || "Workspace member",
-              )}</strong
-            >
-            <small>
-              · ${escapeHtml(new Date(f.created).toLocaleString())}</small
-            >
-            <p>${escapeHtml(f.body)}</p>
-            ${(state.data.feedback_attachments || []).filter((file) => file.feedback_id === f.id).map((file) => file.content_type?.startsWith("image/")
-              ? `<figure class="attachment-preview" data-image-attachment="${file.id}"><p class="muted" role="status">Loading ${escapeHtml(file.name)}…</p><button type="button" class="image-thumbnail" aria-label="Enlarge ${escapeHtml(file.name)}" hidden><img alt="${escapeHtml(file.name)}"></button><figcaption>${escapeHtml(file.name)}</figcaption></figure>`
-              : `<button type="button" class="textbutton" data-attachment="${file.id}">Download ${escapeHtml(file.name)} (${Math.ceil(file.size / 1024)} KB)</button>`).join(" ")}
-            ${thread(items, f.id)}
-          </div>`,
-      )
-      .join("");
+  function thread(items) {
+    return [...items].sort((a, b) => new Date(a.created) - new Date(b.created) || a.id - b.id).map((message) => {
+      const author = state.data.people.find((person) => person.auth_user_id === message.author_id)?.name || "Workspace member";
+      const parent = items.find((item) => item.id === message.parent_id);
+      const own = message.author_id === state.data.profile.auth_user_id;
+      return `<article class="chat-message ${own ? "own-message" : ""} ${parent ? "reply" : ""}" data-message="${message.id}">
+        <div class="message-meta"><strong>${escapeHtml(author)}</strong><time>${escapeHtml(new Date(message.created).toLocaleString())}</time></div>
+        <button type="button" class="message-content" aria-label="Message from ${escapeHtml(author)}: ${escapeHtml(message.body.slice(0, 90))}" aria-expanded="false">
+          ${parent ? `<span class="message-quote">${escapeHtml(parent.body.slice(0, 120))}</span>` : ""}
+          <span class="message-text">${escapeHtml(message.body)}</span>
+        </button>
+        ${(state.data.feedback_attachments || []).filter((file) => file.feedback_id === message.id).map((file) => file.content_type?.startsWith("image/")
+          ? `<figure class="attachment-preview" data-image-attachment="${file.id}"><p class="muted" role="status">Loading ${escapeHtml(file.name)}…</p><button type="button" class="image-thumbnail" aria-label="Enlarge ${escapeHtml(file.name)}" hidden><img alt="${escapeHtml(file.name)}"></button><figcaption>${escapeHtml(file.name)}</figcaption></figure>`
+          : `<button type="button" class="textbutton" data-attachment="${file.id}">Download ${escapeHtml(file.name)} (${Math.ceil(file.size / 1024)} KB)</button>`).join(" ")}
+        <div class="message-actions" hidden><button type="button" class="textbutton" data-reply="${message.id}">↩ Reply</button></div>
+      </article>`;
+    }).join("");
   }
   function detail(id) {
     const a = state.data.assignments.find((x) => x.id === id);
@@ -58,37 +52,31 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
               <p class="description">${escapeHtml(a.description)}</p>
             </div>
             <div class="panel">
-              <h2>
+              <div class="chat-heading"><h2>
                 Feedback
-                <span class="muted" style="font-size:13px"
+                <span class="feedback-count"
                   >(${feedback.length})</span
                 >
               </h2>
-              <p class="muted" style="font-size:13px">
-                Keep the conversation connected to ${formatAssignmentId(id)}.
-              </p>
-              ${thread(feedback) ||
-              '<p class="muted">No feedback yet. Start the conversation below.</p>'}
+                  ${manager ? '<button type="button" class="secondary attachment-button" id="open-analysis" aria-label="Ask AI" title="Ask AI"><svg class="ai-sparkle" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6Z"/><path d="m20 2 .6 1.4L22 4l-1.4.6L20 6l-.6-1.4L18 4l1.4-.6Z"/></svg></button>' : ""}
+              </div>
+              <div class="chat-conversation" aria-label="Assignment conversation">${thread(feedback) ||
+              '<p class="muted">No feedback yet. Start the conversation below.</p>'}</div>
               <form class="composer" id="feedback">
+                <div id="reply-context" class="reply-context" hidden><div><strong id="reply-author"></strong><p id="reply-preview"></p></div><button type="button" class="textbutton" id="cancel-reply" aria-label="Cancel reply">×</button></div>
                 <label for="body">Add feedback</label
                 ><div class="feedback-input"><textarea
                   id="body"
                   name="body"
-                  placeholder="Share guidance or ask for an update…"
+                  placeholder="Write a message…"
+                  rows="1"
                   required
                 ></textarea>
                 <div class="composer-actions">
                   ${attachmentPicker("feedback-files")}
+                  <button type="submit" class="post-feedback">Post feedback</button>
                 </div></div>
                 <div class="error" role="alert"></div>
-                <div class="feedback-footer">
-                  ${feedback.length ? `<select id="reply-to" name="parent_id" aria-label="Reply to message"><option value="">New message</option>${feedback.map((message) => {
-                    const author = state.data.people.find((person) => person.auth_user_id === message.author_id)?.name || "Workspace member";
-                    return `<option value="${message.id}">${escapeHtml(author)}: ${escapeHtml(message.body.slice(0, 90))}</option>`;
-                  }).join("")}</select>` : ""}
-                  ${manager ? '<button type="button" class="secondary attachment-button" id="open-analysis" aria-label="Ask AI" title="Ask AI"><span aria-hidden="true">✨</span></button>' : ""}
-                  <button type="submit" class="post-feedback">Post feedback</button>
-                </div>
               </form>
             </div>
           </section>
@@ -129,12 +117,51 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
         </div>`,
     );
     bindAttachmentPickers(document.querySelector("#feedback"));
-    const replyTo = document.querySelector("#reply-to");
-    if (replyTo) replyTo.onchange = () => {
-      const replying = Boolean(replyTo.value);
-      document.querySelector('label[for="body"]').textContent = replying ? "Your reply" : "Add feedback";
-      document.querySelector(".post-feedback").textContent = replying ? "Post reply" : "Post feedback";
-      document.querySelector("#body").focus();
+    if (manager) {
+      const workspace = state.data;
+      const employeeIds = new Set(workspace.employees.map((person) => person.auth_user_id));
+      const readIds = new Set((workspace.feedback_reads || []).map((item) => item.feedback_id));
+      const ids = feedback.filter((message) => employeeIds.has(message.author_id) && !readIds.has(message.id)).map((message) => message.id);
+      if (ids.length) api("read-feedback", { ids }).then(() => {
+        workspace.feedback_reads ||= [];
+        workspace.feedback_reads.push(...ids.map((feedback_id) => ({ feedback_id, manager_id: workspace.profile.auth_user_id })));
+      }).catch((error) => toast(error.message));
+    }
+    let replyTo = null;
+    const conversation = document.querySelector(".chat-conversation");
+    conversation.scrollTop = conversation.scrollHeight;
+    const hideActions = () => {
+      conversation.querySelectorAll(".message-actions").forEach((actions) => { actions.hidden = true; });
+      conversation.querySelectorAll(".message-content").forEach((button) => button.setAttribute("aria-expanded", "false"));
+    };
+    conversation.querySelectorAll(".message-content").forEach((button) => {
+      button.onclick = () => {
+        const actions = button.closest("[data-message]").querySelector(".message-actions");
+        const show = actions.hidden;
+        hideActions();
+        actions.hidden = !show;
+        button.setAttribute("aria-expanded", String(show));
+      };
+    });
+    conversation.querySelectorAll("[data-reply]").forEach((button) => {
+      button.onclick = () => {
+        replyTo = Number(button.dataset.reply);
+        const message = feedback.find((item) => item.id === replyTo);
+        const author = state.data.people.find((person) => person.auth_user_id === message.author_id)?.name || "Workspace member";
+        document.querySelector("#reply-author").textContent = `Replying to ${author}`;
+        document.querySelector("#reply-preview").textContent = message.body;
+        document.querySelector("#reply-context").hidden = false;
+        document.querySelector('label[for="body"]').textContent = "Your reply";
+        document.querySelector(".post-feedback").textContent = "Post reply";
+        hideActions();
+        document.querySelector("#body").focus();
+      };
+    });
+    document.querySelector("#cancel-reply").onclick = () => {
+      replyTo = null;
+      document.querySelector("#reply-context").hidden = true;
+      document.querySelector('label[for="body"]').textContent = "Add feedback";
+      document.querySelector(".post-feedback").textContent = "Post feedback";
     };
     document.querySelectorAll("[data-image-attachment]").forEach(async (figure) => {
       const file = state.data.feedback_attachments.find((item) => item.id === Number(figure.dataset.imageAttachment));
@@ -182,7 +209,7 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
       try {
         await api("feedback", {
           assignment_id: id,
-          parent_id: replyTo?.value ? Number(replyTo.value) : null,
+          parent_id: replyTo,
           files: Array.from(e.target.elements.files.files),
           body: new FormData(e.target).get("body"),
         });
@@ -213,10 +240,14 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
         dialog.innerHTML = `<button type="button" class="popup-close" id="close-analysis" aria-label="Close" title="Close">×</button><div id="assignment-analysis"></div>`;
         dialog.setAttribute("aria-label", `Ask AI · ${a.title}`);
         dialog.showModal();
-        const close = () => { dialog.close(); dialog.innerHTML = ""; dialog.removeAttribute("aria-label"); dialog.oncancel = null; };
+        let posted = false;
+        const close = () => { if (posted) refresh().catch((error) => toast(error.message)); dialog.close(); dialog.innerHTML = ""; dialog.removeAttribute("aria-label"); dialog.oncancel = null; };
         dialog.querySelector("#close-analysis").onclick = close;
         dialog.oncancel = (event) => { event.preventDefault(); close(); };
-        mountAssignmentAnalysis(dialog.querySelector("#assignment-analysis"), id);
+        mountAssignmentAnalysis(dialog.querySelector("#assignment-analysis"), id, () => {
+          posted = true;
+          if (!dialog.open) refresh().catch((error) => toast(error.message));
+        });
       };
       document.querySelector("#status").onchange = async (e) => {
         try {

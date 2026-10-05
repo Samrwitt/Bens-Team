@@ -14,7 +14,7 @@ export function createEmployeesPage({ state }) {
               <thead>
                 <tr>
                   <th>Employee</th>
-                  <th>Email / sign-in</th>
+                  <th>Email</th>
                   <th>Teams</th>
                   <th>Account</th>
                 </tr>

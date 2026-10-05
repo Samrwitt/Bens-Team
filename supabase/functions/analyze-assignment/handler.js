@@ -1,7 +1,7 @@
+import { generateAnswer } from "./providers.js";
 import {
   AnalysisError,
   retrieveContext,
-  SYSTEM_INSTRUCTION,
 } from "./context.js";
 
 const cors = {
@@ -20,12 +20,13 @@ const response = (body, status = 200) =>
     },
   });
 
-// Dependencies are injected so authentication and Gemini error paths can be tested without a key.
+// Dependencies are injected so authentication and provider failures can be tested without keys.
 export function createAnalysisHandler({
   createClient,
   getEnv,
   fetchImpl = fetch,
 }) {
+  let nextProvider = 0;
   return async (request) => {
     if (request.method === "OPTIONS")
       return new Response("ok", { headers: cors });
@@ -62,7 +63,7 @@ export function createAnalysisHandler({
         return response({ error: "Manager access required." }, 403);
 
       const text = await request.text();
-      if (text.length > 12_000)
+      if (text.length > 64_000)
         throw new AnalysisError("Request is too large.", 413);
       let body;
       try {
@@ -89,105 +90,33 @@ export function createAnalysisHandler({
           "Enter a question between 1 and 2,000 characters.",
         );
       }
+      const history = body.history ?? [];
+      if (!Array.isArray(history) || history.length > 8 || history.length % 2 !== 0 ||
+        history.some((message, index) => !message || message.role !== (index % 2 === 0 ? "user" : "assistant") || typeof message.content !== "string" || !message.content.trim() || message.content.length > (message.role === "user" ? 2000 : 30_000)) ||
+        JSON.stringify(history).length > 24_000) {
+        throw new AnalysisError("The conversation is too long or invalid. Start a new chat.");
+      }
       const context = await retrieveContext(database, body.assignment_id);
-      const key = getEnv("GEMINI_API_KEY")?.trim();
-      // Source retrieval works before Gemini is connected; never fabricate an answer.
-      if (!key || !hasQuestion)
-        return response({ ...context, configured: Boolean(key) });
-      const model = getEnv("GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
-      if (!/^[a-zA-Z0-9._-]+$/.test(model))
-        throw new AnalysisError(
-          "The AI connection needs attention. Check its model setting.",
-          503,
-        );
-      let generated;
-      try {
-        generated = await fetchImpl(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-goog-api-key": key,
-            },
-            signal: AbortSignal.timeout(45_000),
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      text: JSON.stringify({
-                        question: body.question.trim(),
-                        current_date: new Date().toISOString().slice(0, 10),
-                        assignment_id: context.assignment_id,
-                        sources: context.sources,
-                      }),
-                    },
-                  ],
-                },
-              ],
-              generationConfig: { maxOutputTokens: 4096 },
-            }),
-          },
-        );
-      } catch (error) {
-        if (error.name === "TimeoutError" || error.name === "AbortError")
-          throw new AnalysisError(
-            "AI took too long to respond. Please try again.",
-            504,
-          );
-        throw new AnalysisError(
-          "AI could not be reached. Please try again.",
-          503,
-        );
+      const providers = [
+        { name: "gemini", key: getEnv("GEMINI_API_KEY")?.trim(), model: getEnv("GEMINI_MODEL")?.trim() || "gemini-3.8-flash" },
+        { name: "groq", key: getEnv("GROQ_API_KEY")?.trim(), model: getEnv("GROQ_MODEL")?.trim() || "openai/gpt-oss-120b" },
+      ].filter((provider) => provider.key);
+      if (!providers.length || !hasQuestion)
+        return response({ ...context, configured: Boolean(providers.length) });
+      // Alternate the first provider within each worker; try the other on failure.
+      const first = nextProvider++ % providers.length;
+      let failure;
+      for (let offset = 0; offset < providers.length; offset++) {
+        const provider = providers[(first + offset) % providers.length];
+        try {
+          const answer = await generateAnswer(provider, context, body.question, fetchImpl, history);
+          return response({ ...context, configured: true, ...answer });
+        } catch (error) {
+          if (!(error instanceof AnalysisError)) throw error;
+          failure = error;
+        }
       }
-      if (!generated.ok) {
-        if (generated.status === 429)
-          throw new AnalysisError(
-            "AI is busy or its quota is used up. Please try again later.",
-            429,
-          );
-        if ([400, 401, 403, 404].includes(generated.status))
-          throw new AnalysisError(
-            "The AI connection needs attention. Check the Gemini key and model settings.",
-            503,
-          );
-        throw new AnalysisError(
-          "AI could not answer right now. Please try again.",
-          502,
-        );
-      }
-      const payload = await generated.json();
-      const candidate = payload.candidates?.[0];
-      if (candidate?.finishReason !== "STOP")
-        throw new AnalysisError(
-          "AI could not complete an answer. Try a shorter or more specific question.",
-          502,
-        );
-      const answer = candidate.content?.parts
-        ?.filter((part) => !part.thought)
-        .map((part) => part.text || "")
-        .join("\n")
-        .trim();
-      if (!answer || answer.length > 30_000)
-        throw new AnalysisError(
-          "AI returned no usable answer. Please try again.",
-          502,
-        );
-      const references = new Set(
-        context.sources.map((source) => source.reference),
-      );
-      const cited = [...answer.matchAll(/\[((?:A|F)\d+)\]/g)].map(
-        (match) => match[1],
-      );
-      if (cited.some((reference) => !references.has(reference)))
-        throw new AnalysisError(
-          "AI returned an invalid source reference. Please try again.",
-          502,
-        );
-      return response({ ...context, configured: true, answer });
+      throw failure;
     } catch (error) {
       if (error instanceof AnalysisError)
         return response({ error: error.message }, error.status);
