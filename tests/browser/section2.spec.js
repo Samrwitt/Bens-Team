@@ -292,6 +292,7 @@ test("AI popup shows connection status without a sources dropdown", async ({
   expect(questions).toEqual([]);
   await expect(page.locator(".chat-heading").getByRole("button", { name: "Ask AI", exact: true }).locator("svg")).toHaveCount(1);
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByLabel("Response mode").selectOption("api");
   await expect(page.getByLabel("Your question")).toBeEnabled();
   expect(questions).toEqual([]);
   await expect(page.locator(".ai-chat")).not.toBeVisible();
@@ -313,6 +314,7 @@ test("manager asks about one assignment, recovers from errors, and gets safely r
   });
   await page.getByText("Prepare the client guide", { exact: true }).click();
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByLabel("Response mode").selectOption("api");
   const question = page.getByLabel("Your question");
   await expect(question).toBeEnabled();
   await question.fill("What should happen next?");
@@ -330,6 +332,7 @@ test("manager asks about one assignment, recovers from errors, and gets safely r
   expect(questions.at(-1)).toEqual({
     assignment_id: 1,
     question: "What should happen next?",
+    mode: "api",
     history: [],
   });
   await question.fill("Which part should I review first?");
@@ -340,12 +343,14 @@ test("manager asks about one assignment, recovers from errors, and gets safely r
   expect(questions.at(-1).history[0]).toEqual({ role: "user", content: "What should happen next?" });
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByLabel("Response mode").selectOption("api");
   await expect(page.locator(".analysis-answer")).toHaveCount(2);
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.locator("nav").getByRole("link", { name: "Assignments" }).click();
   await page.getByText("Team review", { exact: true }).click();
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByLabel("Response mode").selectOption("api");
   await expect(page.getByLabel("Your question")).toBeEmpty();
   await expect(page.locator(".analysis-result")).toBeEmpty();
   expect(questions.at(-1).assignment_id).toBe(1);
@@ -421,6 +426,7 @@ test("manager reviews and posts a suggested question as feedback", async ({ page
   const { feedback, user, errors } = await workspace(page, { role: "manager", configured: true });
   await page.getByText("Prepare the client guide", { exact: true }).click();
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByLabel("Response mode").selectOption("api");
   await page.getByLabel("Your question").fill("How is progress?");
   await page.getByLabel("Your question").press("Enter");
   const draft = page.getByLabel("Suggested feedback question");
@@ -435,6 +441,7 @@ test("manager reviews and posts a suggested question as feedback", async ({ page
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.locator(".message-text").last()).toHaveText("Please share progress on the remaining sections.");
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await page.getByLabel("Response mode").selectOption("api");
   await expect(page.getByRole("button", { name: "Sent", exact: true })).toBeDisabled();
   expect(feedback).toHaveLength(2);
   expect(errors).toEqual([]);
@@ -448,4 +455,21 @@ test("attachment processing status updates without asking AI", async ({ page }) 
   await expect(page.locator(".attachment-processing")).toHaveText("Ready for AI", { timeout: 10000 });
   expect(questions).toEqual([]);
   expect(errors).toEqual([]);
+});
+
+
+test("manager can use default local search and read attributed excerpts", async ({ page }) => {
+  await workspace(page, { role: "manager" });
+  const requests = [];
+  await page.route("**/functions/v1/analyze-assignment", async route => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({ json: { configured: true, mode: "local", answer: "Found 1 matching excerpt(s).", matches: [{ label: "Feedback · Alex", excerpt: "The checklist is drafted.", reference: "F2", score: 0.7 }] } });
+  });
+  await page.getByText("Prepare the client guide", { exact: true }).click();
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+  await expect(page.getByLabel("Response mode")).toHaveValue("local");
+  await page.getByLabel("Your question").fill("checklist");
+  await page.getByLabel("Your question").press("Enter");
+  await expect(page.locator(".analysis-source")).toContainText("The checklist is drafted.");
+  expect(requests[0]).toEqual({ assignment_id: 1, question: "checklist", mode: "local", history: [] });
 });

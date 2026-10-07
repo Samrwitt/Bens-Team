@@ -4,7 +4,7 @@ The active app is a static Vite frontend backed by Supabase Auth, PostgreSQL, an
 
 Implemented: manager and employee sign-in, employee account creation and password resets, teams, assignments, statuses, feedback and nested replies, and manager-only assignment AI analysis.
 
-**Assignment AI:** Configure server-only `GEMINI_API_KEY` / `GEMINI_MODEL` and `GROQ_API_KEY` / `GROQ_MODEL` secrets. With both keys, generation alternates the first provider within each server worker and automatically tries the other if a request fails. With either key, that provider works on its own. Without keys, generation is disabled.
+**Assignment AI:** Configure server-only `GEMINI_API_KEY` / `GEMINI_MODEL` and `GROQ_API_KEY` / `GROQ_MODEL` secrets. With both keys, generation alternates the first provider within each server worker and automatically tries the other if a request fails. With either key, that provider works on its own. Without keys, API generation is disabled; local vector search still works.
 
 ## Start here: edit the code
 
@@ -152,3 +152,11 @@ Production site: https://bens-workroom.vercel.app. The employee portal was deplo
 Open [previews/index.html](previews/index.html) for 21 real production screenshots, captured after signing in to the actual manager and employee workspaces. Earlier sample-data images are retained separately in [previews/sample-data/index.html](previews/sample-data/index.html).
 
 Capture production pages with `scripts/capture-live-previews.mjs`, supplying `WORKROOM_MANAGER_PASSWORD` and `WORKROOM_EMPLOYEE_PASSWORD` through environment variables. Credentials are not stored in the repository. Local sample captures can be recreated with `scripts/capture-previews.mjs`.
+
+### Local retrieval and API LLM modes
+
+Managers choose **Local vector search** (the default) or **API LLM** in the assignment analysis dialog. Local mode runs sparse term-frequency vectors and cosine similarity inside the authenticated Workroom backend, returning up to five ranked, attributed excerpts from the assignment, manager/employee feedback, replies, and ready attachment text. It makes no embedding or generation API requests. This is lexical matching, not semantic embeddings: try words actually used in the sources. No match produces an explicit empty result, not an invented answer. API mode retains full-thread generation and provider fallback; local search results are excluded from the conversation sent to the LLM.
+
+Assignment and feedback posts remain ordinary database writes. Local vectors are computed on demand from current saved content; posting does not wait for vectorization and edits require no index maintenance. Attachment extraction remains asynchronous and its image/scanned-PDF recognition may independently call external APIs even when local search is selected. Both query modes require manager access and retain the existing 200,000-character source limit.
+
+Deploy the updated `analyze-assignment` function and rebuild/deploy the frontend together to enable these options. No database migration or new API key is needed.

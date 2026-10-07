@@ -427,3 +427,28 @@ test('analysis reuses saved selected-assignment attachment content and reports u
   assert.ok(!JSON.stringify(prompt).includes('Private other file.'));
   assert.equal(f.requests.length,1);
 });
+
+test("local vector search returns attributed excerpts without any provider request", async () => {
+  const f = fixture({ key: "configured-key" });
+  const { status, body } = await f.call({ assignment_id: 1, question: "checklist drafted", mode: "local" });
+  assert.equal(status, 200);
+  assert.equal(body.mode, "local");
+  assert.equal(body.matches[0].reference, "F2");
+  assert.equal(body.matches[0].excerpt, "The checklist is drafted.");
+  assert.equal(body.suggested_feedback, null);
+  assert.equal(f.requests.length, 0);
+});
+
+test("local search works without keys and reports no matches honestly", async () => {
+  const f = fixture();
+  const { body } = await f.call({ assignment_id: 1, question: "zzzzunknown", mode: "local" });
+  assert.equal(body.configured, true);
+  assert.deepEqual(body.matches, []);
+  assert.match(body.answer, /No matching excerpts/);
+  assert.equal(f.requests.length, 0);
+});
+
+test("local search still requires manager access and rejects unknown modes", async () => {
+  assert.equal((await fixture({ role: "employee" }).call({ assignment_id: 1, question: "guide", mode: "local" })).status, 403);
+  assert.equal((await fixture().call({ assignment_id: 1, question: "guide", mode: "invalid" })).status, 400);
+});

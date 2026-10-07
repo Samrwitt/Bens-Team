@@ -4,10 +4,16 @@ import { state } from "../state.js";
 export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent = () => {}) {
   const chats = state.analysisChats;
   const messages = chats[assignmentId] ||= [];
-  container.innerHTML = `<h2>Ask AI</h2>
+  container.innerHTML = `<h2>Search or ask AI</h2>
     <div class="ai-chat analysis-result" role="log" aria-label="AI conversation" aria-live="polite"></div>
     <p class="analysis-status muted" role="status" hidden>AI is not connected yet.</p>
     <form id="analysis-form">
+      <label for="analysis-mode">Response mode</label>
+      <select id="analysis-mode" name="mode">
+        <option value="local">Local vector search</option>
+        <option value="api">API LLM</option>
+      </select>
+      <p class="analysis-mode-note muted">Local search returns matching excerpts inside Workroom. API LLM sends this assignment’s sources and AI conversation to Gemini or Groq to write an answer. File recognition may use external APIs during upload processing.</p>
       <label for="analysis-question">Your question</label>
       <div class="ai-chat-composer"><textarea id="analysis-question" name="question" maxlength="2000" rows="2" required placeholder="Ask about this assignment…" ></textarea>
       <button >Send</button></div>
@@ -22,11 +28,21 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
     const bubble = document.createElement("article");
     bubble.className = `ai-chat-message ${role === "user" ? "ai-user" : "ai-assistant"}`;
     const label = document.createElement("small");
-    label.textContent = role === "user" ? "You" : "AI";
+    label.textContent = role === "user" ? "You" : message.mode === "local" ? "Local search" : "AI";
     const text = document.createElement("p");
     text.className = role === "assistant" ? "analysis-answer" : "ai-question";
     text.textContent = content;
     bubble.append(label, text);
+    for (const match of message.matches || []) {
+      const source = document.createElement("section");
+      source.className = "analysis-source";
+      const title = document.createElement("strong");
+      title.textContent = match.label;
+      const excerpt = document.createElement("p");
+      excerpt.textContent = match.excerpt;
+      source.append(title, excerpt);
+      bubble.append(source);
+    }
     if (message.attachment_status?.pending || message.attachment_status?.failed) {
       const note = document.createElement("small");
       note.textContent = [message.attachment_status.pending ? `${message.attachment_status.pending} attachment(s) still processing` : "", message.attachment_status.failed ? `${message.attachment_status.failed} attachment(s) could not be read` : ""].filter(Boolean).join(" · ");
@@ -86,8 +102,9 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
   messages.forEach((message) => addMessage(message.role, message.content, message));
   function recentHistory() {
     const history = [];
-    for (let index = messages.length - 2; index >= 0 && history.length < 8; index -= 2) {
-      const pair = messages.slice(index, index + 2).map(({ role, content }) => ({ role, content }));
+    const apiMessages = messages.filter(message => message.mode !== "local");
+    for (let index = apiMessages.length - 2; index >= 0 && history.length < 8; index -= 2) {
+      const pair = apiMessages.slice(index, index + 2).map(({ role, content }) => ({ role, content }));
       if (JSON.stringify([...pair, ...history]).length > 24_000) break;
       history.unshift(...pair);
     }
@@ -100,18 +117,19 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
     if (button.disabled) return;
     const question = input.value.trim();
     if (!question) return;
+    const mode = form.elements.mode.value;
     if (pending) pending.remove();
     pending = addMessage("user", question);
     thinking?.remove();
-    thinking = addMessage("assistant", "Thinking…");
+    thinking = addMessage("assistant", mode === "local" ? "Searching…" : "Thinking…");
     thinking.classList.add("ai-thinking");
     thinking.querySelector("p").className = "ai-thinking-text";
     button.disabled = true;
     input.disabled = true;
-    button.textContent = "Thinking…";
+    button.textContent = mode === "local" ? "Searching…" : "Thinking…";
     error.textContent = "";
     try {
-      const answer = await api("analysis", { assignment_id: assignmentId, question, history: recentHistory() });
+      const answer = await api("analysis", { assignment_id: assignmentId, question, mode, history: mode === "api" ? recentHistory() : [] });
       if (!container.isConnected) return;
       if (!answer.configured) {
         pending.remove();
@@ -119,9 +137,9 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
 
         container.querySelector(".analysis-status").hidden = false;
       } else {
-        const message = { role: "assistant", content: answer.answer, suggested_feedback: answer.suggested_feedback };
+        const message = { role: "assistant", content: answer.answer, mode, matches: answer.matches, suggested_feedback: answer.suggested_feedback };
         message.attachment_status = answer.attachment_status;
-        messages.push({ role: "user", content: question }, message);
+        messages.push({ role: "user", content: question, mode }, message);
         container.querySelector(".analysis-status").hidden = true;
         pending = null;
         addMessage("assistant", answer.answer, message);

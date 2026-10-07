@@ -1,3 +1,4 @@
+import { searchSources } from "./search.js";
 import { generateAnswer } from "./providers.js";
 import {
   AnalysisError,
@@ -79,6 +80,8 @@ export function createAnalysisHandler({
       ) {
         throw new AnalysisError("Select a valid assignment.");
       }
+      const mode = body.mode ?? "api";
+      if (!["local", "api"].includes(mode)) throw new AnalysisError("Choose local vector search or API LLM.");
       const hasQuestion = Object.hasOwn(body, "question");
       if (
         hasQuestion &&
@@ -97,6 +100,12 @@ export function createAnalysisHandler({
         throw new AnalysisError("The conversation is too long or invalid. Start a new chat.");
       }
       const context = await retrieveContext(database, body.assignment_id);
+      if (mode === "local") {
+        const matches = hasQuestion ? searchSources(context.sources, body.question) : [];
+        return response({ ...context, mode, configured: true, matches,
+          answer: matches.length ? `Found ${matches.length} matching excerpt(s). These are saved source text, not an AI answer.` : "No matching excerpts. Try specific words used in the assignment or feedback.",
+          suggested_feedback: null });
+      }
       const providers = [
         { name: "gemini", key: getEnv("GEMINI_API_KEY")?.trim(), model: getEnv("GEMINI_MODEL")?.trim() || "gemini-3.8-flash" },
         { name: "groq", key: getEnv("GROQ_API_KEY")?.trim(), model: getEnv("GROQ_MODEL")?.trim() || "openai/gpt-oss-120b" },

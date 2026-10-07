@@ -104,3 +104,6 @@ textarea:disabled {
 .ai-feedback-composer { position: relative; margin-top: 12px; border: 1px solid #dbe1e5; border-radius: 8px; background: white; }
 .ai-feedback-composer .ai-feedback-draft { display: block; margin: 0; border: 0; background: transparent; padding: 10px 54px 10px 12px; min-height: 58px; }
 .ai-feedback-composer .ai-feedback-send { position: absolute; right: 8px; bottom: 8px; }
+
+#analysis-mode { margin: 6px 0; max-width: 100%; }
+.analysis-mode-note { font-size: 12px; line-height: 1.5; }
