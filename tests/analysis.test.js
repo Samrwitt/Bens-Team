@@ -452,3 +452,20 @@ test("local search still requires manager access and rejects unknown modes", asy
   assert.equal((await fixture({ role: "employee" }).call({ assignment_id: 1, question: "guide", mode: "local" })).status, 403);
   assert.equal((await fixture().call({ assignment_id: 1, question: "guide", mode: "invalid" })).status, 400);
 });
+
+test("local search excludes legacy LLM recognition until local reprocessing completes", async () => {
+  const f = fixture({ attachments: [{ id: 8, feedback_id: 2, name: 'scan.png', content_type: 'image/png' }],
+    processing: [{ attachment_id: 8, status: 'ready', extracted_text: 'LegacyUnique provider interpretation', content_hash: 'v1:image:old' }] });
+  const { body } = await f.call({ assignment_id: 1, question: 'LegacyUnique', mode: 'local' });
+  assert.deepEqual(body.matches, []);
+  assert.ok(!JSON.stringify(body).includes('provider interpretation'));
+  assert.equal(body.attachment_status.pending, 1);
+});
+
+test("local search includes cached local OCR text", async () => {
+  const f = fixture({ attachments: [{ id: 8, feedback_id: 2, name: 'scan.png', content_type: 'image/png' }],
+    processing: [{ attachment_id: 8, status: 'ready', extracted_text: 'OCRUnique readable text', content_hash: 'v2-local:image:new' }] });
+  const { body } = await f.call({ assignment_id: 1, question: 'OCRUnique', mode: 'local' });
+  assert.equal(body.matches[0].reference, 'T8');
+  assert.equal(body.attachment_status.ready, 1);
+});

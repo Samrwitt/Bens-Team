@@ -15,7 +15,7 @@ async function read(query) {
     );
   return data;
 }
-export async function retrieveContext(database, assignmentId) {
+export async function retrieveContext(database, assignmentId, { localOnly = false } = {}) {
   const assignment = await read(
     database
       .from("assignments")
@@ -94,18 +94,19 @@ export async function retrieveContext(database, assignmentId) {
   }
   const processing = [];
   for (let start = 0; start < attachments.length; start += 100) {
-    processing.push(...await read(database.from("attachment_processing").select("attachment_id,status,extracted_text,error").in("attachment_id",attachments.slice(start,start+100).map(file=>file.id))));
+    processing.push(...await read(database.from("attachment_processing").select("attachment_id,status,extracted_text,error,content_hash").in("attachment_id",attachments.slice(start,start+100).map(file=>file.id))));
   }
   const statuses = new Map(processing.map(item=>[item.attachment_id,item]));
   const attachmentStatus = { ready:0, pending:0, failed:0 };
   for (const file of attachments) {
     const record = statuses.get(file.id);
-    const ready = record?.status === "ready" && record.extracted_text;
+    const legacyContent = localOnly && record?.status === "ready" && !record.content_hash?.startsWith("v2-local:");
+    const ready = record?.status === "ready" && record.extracted_text && !legacyContent;
     if (ready) attachmentStatus.ready++;
     else if (["failed","unsupported"].includes(record?.status)) attachmentStatus.failed++;
     else attachmentStatus.pending++;
     sources.push({reference:`T${file.id}`,label:`Attachment: ${file.name} · Feedback F${file.feedback_id}`,
-      text:ready ? `Processed file content:\n${record.extracted_text}` : `File content unavailable (${record?.status || "queued"}). ${record?.error || "Processing has not finished."}`});
+      text:ready ? `Processed file content:\n${record.extracted_text}` : `File content unavailable (${legacyContent ? "awaiting local reprocessing" : record?.status || "queued"}). ${legacyContent ? "This file needs to be reprocessed with local OCR." : record?.error || "Processing has not finished."}`});
   }
   if (JSON.stringify(sources).length > MAX_CONTEXT_CHARACTERS) {
     throw new AnalysisError(

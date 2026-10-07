@@ -99,7 +99,7 @@ export function createAnalysisHandler({
         JSON.stringify(history).length > 24_000) {
         throw new AnalysisError("The conversation is too long or invalid. Start a new chat.");
       }
-      const context = await retrieveContext(database, body.assignment_id);
+      const context = await retrieveContext(database, body.assignment_id, { localOnly: mode === "local" });
       if (mode === "local") {
         const matches = hasQuestion ? searchSources(context.sources, body.question) : [];
         return response({ ...context, mode, configured: true, matches,

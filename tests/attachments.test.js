@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { zipSync, unzipSync } from 'fflate';
-import { extractFile, recognizeFile } from '../supabase/functions/process-attachments/extract.js';
+import { extractFile } from '../supabase/functions/process-attachments/extract.js';
+import { recognizeLocal } from '../supabase/functions/process-attachments/local-ocr.js';
 import { createProcessorHandler, processQueue } from '../supabase/functions/process-attachments/worker.js';
 const encoder = new TextEncoder();
 const dependencies={getDocument,unzipSync,recognize:()=>{throw new Error('Unexpected AI call');}};
@@ -32,11 +33,20 @@ test('scanned PDF pages invoke recognition instead of being silently omitted', a
   const text=await extractFile(file('scan.pdf'),pdfBytes(),{...dependencies,getDocument:()=>({promise:Promise.resolve({numPages:2,getPage:async(n)=>({getTextContent:async()=>({items:n===1?[{str:'Some text'}]:[]}),cleanup(){}})}),destroy:async()=>{}}),recognize:async()=>{calls++;return 'Page 1: text. Page 2: screenshot.';}});
   assert.equal(calls,1);assert.match(text,/Page 2/);
 });
-test('recognition uses a vision model and falls back without leaking provider errors',async()=>{
+test('local OCR sends raw bytes only to the configured worker with no LLM fallback', async()=>{
   const calls=[];
-  const text=await recognizeFile(new Uint8Array([1,2]),'image/png',{getEnv:n=>({GROQ_API_KEY:'groq',GEMINI_API_KEY:'gemini'})[n],fetchImpl:async(url,init)=>{calls.push({url,body:JSON.parse(init.body)});return calls.length===1?new Response('private key details',{status:429}):new Response(JSON.stringify({candidates:[{finishReason:'STOP',content:{parts:[{text:'Screenshot shows a team form.'}]}}]}));}});
-  assert.equal(text,'Screenshot shows a team form.');assert.equal(calls[0].body.model,'qwen/qwen3.8-27b');assert.equal(calls.length,2);
-  await assert.rejects(recognizeFile(new Uint8Array([1]),'image/png',{getEnv:()=> 'key',fetchImpl:async()=>new Response('secret',{status:429})}),error=>error.retryable && !error.message.includes('secret'));
+  const bytes=new Uint8Array([1,2]);
+  const text=await recognizeLocal(bytes,'image/png',{getEnv:n=>({LOCAL_OCR_URL:'https://ocr.workroom.test/extract',LOCAL_OCR_SECRET:'worker-secret',GROQ_API_KEY:'unused'})[n],fetchImpl:async(url,init)=>{calls.push({url,init});return new Response(JSON.stringify({text:'Section 1 finished'}));}});
+  assert.equal(text,'Section 1 finished');
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].url,'https://ocr.workroom.test/extract');
+  assert.equal(calls[0].init.body,bytes);
+  assert.equal(calls[0].init.headers.Authorization,'Bearer worker-secret');
+  await assert.rejects(recognizeLocal(bytes,'image/png',{getEnv:n=>n==='GROQ_API_KEY'?'key':undefined,fetchImpl:()=>{throw new Error('Must not call LLM');}}),/Local OCR is not configured/);
+});
+test('local OCR rejects insecure endpoints and hides worker errors',async()=>{
+  await assert.rejects(recognizeLocal(new Uint8Array([1]),'image/png',{getEnv:n=>n==='LOCAL_OCR_URL'?'http://remote.test/extract':'secret'}),/HTTPS/);
+  await assert.rejects(recognizeLocal(new Uint8Array([1]),'image/png',{getEnv:n=>n==='LOCAL_OCR_URL'?'https://ocr.test/extract':'secret',fetchImpl:async()=>new Response('private information',{status:503})}),error=>error.retryable && !error.message.includes('private information'));
 });
 function workerFixture(overrides = {}) {
   const bytes=encoder.encode('Saved progress');
@@ -65,7 +75,7 @@ test('only authenticated webhook starts background work and returns immediately'
 test('duplicate images use one recognition request and then saved content',async()=>{
   const f=workerFixture({name:'screenshot.png',content_type:'image/png'});
   let calls=0;
-  await processQueue(f.database,{...dependencies,getEnv:n=>n==='GROQ_API_KEY'?'key':undefined,fetchImpl:async()=>{calls++;return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:'Screenshot shows the team page.'}}]}));}});
+  await processQueue(f.database,{...dependencies,getEnv:n=>({LOCAL_OCR_URL:'https://ocr.test/extract',LOCAL_OCR_SECRET:'secret'})[n],fetchImpl:async()=>{calls++;return new Response(JSON.stringify({text:'Team page'}));}});
   assert.equal(calls,1);assert.equal(f.cache.size,1);
   assert.equal(f.jobs.filter(job=>job.status==='ready').length,2);
 });
