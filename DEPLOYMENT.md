@@ -1,5 +1,25 @@
 # Deployment status
 
+Text size refined (2026-10-08): feedback/reply inputs and conversation messages reduced to 17px. Build passed. Vercel deployment: `dpl_GeCHxERm9NSdZWrfsRv582rFD9TV`.
+
+Text size reduced (2026-10-08): feedback/reply inputs and conversation messages returned to 18px at the user's request. Build passed. Vercel deployment: `dpl_3machPtWJsC7czdyqs5egVj8Mfx9`.
+
+Further text enlargement (2026-10-08): feedback/reply inputs and conversation message text increased to 20px. Build passed. Vercel deployment: `dpl_GmEjvB5oi3Xf9t4BV7fSNqFPjgy4`.
+
+Feedback text enlargement (2026-10-08): feedback/reply input and conversation message text increased from 14px to 18px with 1.6 line spacing. Production build passed. Vercel deployment: `dpl_6tG1iLTBRCFSqhYDuicieFa5dZEy`.
+
+## Text box and RAG mode deployment (2026-10-08)
+
+Local OCR disabled at the user's request: local search excludes image/PDF extraction, including previously cached OCR text, and retains saved text/DOCX content from either extraction version. OCR source files remain in the repository. No OCR worker or reprocessing migration is deployed. Existing API-mode attachment processing is unchanged. The interface explicitly describes the local-search coverage.
+
+- Deployed frontend `dpl_5uwbTZvFd7taPvi8oZjUWgfAghDv` to https://bens-workroom.vercel.app, including an accurate explanation of local attachment availability.
+- Feedback and reply composer now starts at 160px, shows six rows, and supports vertical resizing.
+- Deployed `analyze-assignment` with manager-selectable local vector search and API LLM. Local search computes lexical vectors on demand without an embedding or generation API request.
+- Analysis and attachment suites pass under Node 24; database authorization tests and all 11 browser tests pass. Earlier attachment test failures were caused by unsupported Node 18.
+- Verified production assets contain the larger composer and both mode options. Stored manager credentials were rejected, so authenticated live query verification remains pending.
+- Local OCR is not configured in Supabase (`LOCAL_OCR_URL` and `LOCAL_OCR_SECRET` are absent). The updated local-only `process-attachments` function and reprocessing migration were not deployed because that would disable image/scanned-PDF extraction until an OCR host is configured. Local search excludes legacy provider-extracted attachment content. Existing production attachment processing remains active.
+- Automatic approval review rejected a live API-mode check because production content could reach a third-party LLM. No live API generation check was performed.
+
 Supabase project: `ubjqmdvjttkufcfeyfyw` (Ben's Project).
 
 - Database migration `202609290001_workroom` applied using the HTTPS Management API because the direct Postgres connection timed out. Migration history recorded in `supabase_migrations.schema_migrations`.

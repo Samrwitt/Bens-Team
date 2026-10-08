@@ -75,7 +75,7 @@ export function createAssignmentDetailPage({ state, refresh, render }) {
                   id="body"
                   name="body"
                   placeholder="Write a message…"
-                  rows="1"
+                  rows="6"
                   required
                 ></textarea>
                 <div class="composer-actions">

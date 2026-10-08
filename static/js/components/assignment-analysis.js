@@ -13,7 +13,7 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
         <option value="local">Local vector search</option>
         <option value="api">API LLM</option>
       </select>
-      <p class="analysis-mode-note muted">Local search returns matching excerpts inside Workroom. API LLM sends this assignment’s sources and AI conversation to Gemini or Groq to write an answer. Images and scanned PDFs use local OCR, without an LLM API.</p>
+      <p class="analysis-mode-note muted">Local search searches assignments, feedback, and saved text or DOCX attachments without an LLM request. OCR is disabled; images and PDFs are excluded from local search. API LLM sends this assignment’s sources and AI conversation to Gemini or Groq to write an answer.</p>
       <label for="analysis-question">Your question</label>
       <div class="ai-chat-composer"><textarea id="analysis-question" name="question" maxlength="2000" rows="2" required placeholder="Ask about this assignment…" ></textarea>
       <button >Send</button></div>

@@ -100,13 +100,14 @@ export async function retrieveContext(database, assignmentId, { localOnly = fals
   const attachmentStatus = { ready:0, pending:0, failed:0 };
   for (const file of attachments) {
     const record = statuses.get(file.id);
-    const legacyContent = localOnly && record?.status === "ready" && !record.content_hash?.startsWith("v2-local:");
-    const ready = record?.status === "ready" && record.extracted_text && !legacyContent;
+    // Images and PDFs may contain OCR output; deployed local search does not use it.
+    const excluded = localOnly && !/^(?:v1|v2-local):(text|docx):/.test(record?.content_hash || "");
+    const ready = record?.status === "ready" && record.extracted_text && !excluded;
     if (ready) attachmentStatus.ready++;
-    else if (["failed","unsupported"].includes(record?.status)) attachmentStatus.failed++;
+    else if (excluded || ["failed","unsupported"].includes(record?.status)) attachmentStatus.failed++;
     else attachmentStatus.pending++;
     sources.push({reference:`T${file.id}`,label:`Attachment: ${file.name} · Feedback F${file.feedback_id}`,
-      text:ready ? `Processed file content:\n${record.extracted_text}` : `File content unavailable (${legacyContent ? "awaiting local reprocessing" : record?.status || "queued"}). ${legacyContent ? "This file needs to be reprocessed with local OCR." : record?.error || "Processing has not finished."}`});
+      text:ready ? `Processed file content:\n${record.extracted_text}` : excluded ? "File content is unavailable in local search. Local search supports saved text and DOCX content; image and PDF content is excluded because OCR is disabled in this mode." : `File content unavailable (${record?.status || "queued"}). ${record?.error || "Processing has not finished."}`});
   }
   if (JSON.stringify(sources).length > MAX_CONTEXT_CHARACTERS) {
     throw new AnalysisError(

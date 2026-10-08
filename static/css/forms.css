@@ -117,6 +117,8 @@ dialog::backdrop {
 }
 .feedback-input textarea {
   display: block;
+  font-size: 17px;
+  line-height: 1.6;
   width: 100%;
   min-height: 105px;
   border: 0;
@@ -184,10 +186,10 @@ dialog::backdrop {
   color: white;
 }
 .composer .feedback-input textarea {
-  min-height: 38px;
-  height: 38px;
-  resize: none;
-  font-size: 14px;
+  min-height: 160px;
+  height: 160px;
+  resize: vertical;
+  font-size: 17px;
   padding: 10px 12px;
 }
 .composer .feedback-input .composer-actions {
@@ -219,6 +221,6 @@ dialog::backdrop {
   height: 22px;
 }
 
-.composer .feedback-input { display: flex; align-items: center; }
+.composer .feedback-input { display: flex; align-items: flex-end; }
 .composer .feedback-input textarea { flex: 1; min-width: 0; margin: 0; }
 .composer .feedback-input .composer-actions { flex-shrink: 0; padding: 4px; }

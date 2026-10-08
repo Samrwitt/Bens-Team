@@ -453,19 +453,31 @@ test("local search still requires manager access and rejects unknown modes", asy
   assert.equal((await fixture().call({ assignment_id: 1, question: "guide", mode: "invalid" })).status, 400);
 });
 
-test("local search excludes legacy LLM recognition until local reprocessing completes", async () => {
+test("local search excludes legacy LLM recognition with OCR disabled", async () => {
   const f = fixture({ attachments: [{ id: 8, feedback_id: 2, name: 'scan.png', content_type: 'image/png' }],
     processing: [{ attachment_id: 8, status: 'ready', extracted_text: 'LegacyUnique provider interpretation', content_hash: 'v1:image:old' }] });
   const { body } = await f.call({ assignment_id: 1, question: 'LegacyUnique', mode: 'local' });
   assert.deepEqual(body.matches, []);
   assert.ok(!JSON.stringify(body).includes('provider interpretation'));
-  assert.equal(body.attachment_status.pending, 1);
+  assert.equal(body.attachment_status.failed, 1);
 });
 
-test("local search includes cached local OCR text", async () => {
+test("local search excludes cached local OCR text", async () => {
   const f = fixture({ attachments: [{ id: 8, feedback_id: 2, name: 'scan.png', content_type: 'image/png' }],
     processing: [{ attachment_id: 8, status: 'ready', extracted_text: 'OCRUnique readable text', content_hash: 'v2-local:image:new' }] });
   const { body } = await f.call({ assignment_id: 1, question: 'OCRUnique', mode: 'local' });
-  assert.equal(body.matches[0].reference, 'T8');
-  assert.equal(body.attachment_status.ready, 1);
+  assert.deepEqual(body.matches, []);
+  assert.equal(body.attachment_status.ready, 0);
+  assert.ok(!JSON.stringify(body).includes('OCRUnique readable text'));
+});
+
+test("local search retains saved text and DOCX content without OCR", async () => {
+  for (const kind of ['text', 'docx']) {
+    const f = fixture({ attachments: [{ id: 8, feedback_id: 2, name: `notes.${kind === 'text' ? 'txt' : 'docx'}`, content_type: kind === 'text' ? 'text/plain' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }],
+      processing: [{ attachment_id: 8, status: 'ready', extracted_text: 'DocumentUnique saved progress', content_hash: `v1:${kind}:old` }] });
+    const { body } = await f.call({ assignment_id: 1, question: 'DocumentUnique', mode: 'local' });
+    assert.equal(body.matches[0].reference, 'T8');
+    assert.equal(body.attachment_status.ready, 1);
+    assert.equal(f.requests.length, 0);
+  }
 });
