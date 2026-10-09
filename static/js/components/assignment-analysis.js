@@ -8,13 +8,13 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
     <div class="ai-chat analysis-result" role="log" aria-label="AI conversation" aria-live="polite"></div>
     <p class="analysis-status muted" role="status" hidden>AI is not connected yet.</p>
     <form id="analysis-form">
-      <label for="analysis-mode">Response mode</label>
-      <select id="analysis-mode" name="mode">
-        <option value="local">Local vector search</option>
-        <option value="api">API LLM</option>
-      </select>
-      <p class="analysis-mode-note muted">Local search searches assignments, feedback, and saved text or DOCX attachments without an LLM request. OCR is disabled; images and PDFs are excluded from local search. API LLM sends this assignment’s sources and AI conversation to Gemini or Groq to write an answer.</p>
-      <label for="analysis-question">Your question</label>
+      <div class="analysis-composer-heading">
+        <label for="analysis-question">Your question</label>
+        <select id="analysis-mode" name="mode" aria-label="Response mode" title="Choose local search or AI">
+          <option value="local">Local</option>
+          <option value="api">AI</option>
+        </select>
+      </div>
       <div class="ai-chat-composer"><textarea id="analysis-question" name="question" maxlength="2000" rows="2" required placeholder="Ask about this assignment…" ></textarea>
       <button >Send</button></div>
       <div class="error" role="alert"></div>
@@ -45,7 +45,7 @@ export function mountAssignmentAnalysis(container, assignmentId, onFeedbackSent 
     }
     if (message.attachment_status?.pending || message.attachment_status?.failed) {
       const note = document.createElement("small");
-      note.textContent = [message.attachment_status.pending ? `${message.attachment_status.pending} attachment(s) still processing` : "", message.attachment_status.failed ? `${message.attachment_status.failed} attachment(s) could not be read` : ""].filter(Boolean).join(" · ");
+      note.textContent = [message.attachment_status.pending ? `${message.attachment_status.pending} attachment(s) still processing` : "", message.attachment_status.failed ? `${message.attachment_status.failed} attachment(s) ${message.mode === "local" ? "unavailable in local mode (excluded or unreadable)" : "could not be read"}` : ""].filter(Boolean).join(" · ");
       bubble.append(note);
     }
     if (role === "assistant" && message.suggested_feedback) {

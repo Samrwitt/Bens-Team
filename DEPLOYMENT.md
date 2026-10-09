@@ -1,5 +1,11 @@
 # Deployment status
 
+Grouped progress and compact mode selector (2026-10-09): deployed `analyze-assignment` with one attribution per author and frontend `dpl_97sSoFgG6PYgPV4yyuWUVvRSyRJb` with a compact Local/AI select beside the question label. Analysis suite, production build, and all 11 browser tests passed.
+
+Local response refinement (2026-10-09): removed local suggested feedback drafts and replaced the generic progress explanation with concise attributed reports selected using conservative rules. Requests and future plans are excluded; negative reports remain intact. Analysis tests passed. Backend-only update deployed to `analyze-assignment`; existing chat responses require a new question.
+
+Local progress overview deployed (2026-10-09): deployed `analyze-assignment` to Supabase project `ubjqmdvjttkufcfeyfyw` and frontend deployment `dpl_HjXUcoLGWFzLfk5cwVhuKWX2Hf54` to https://bens-workroom.vercel.app. Local progress questions now return recorded assignment status, owner, due date, recent attributed feedback, and an editable follow-up. Analysis tests passed; Vercel production build passed. Authenticated end-to-end progress verification remains pending.
+
 Text size refined (2026-10-08): feedback/reply inputs and conversation messages reduced to 17px. Build passed. Vercel deployment: `dpl_GeCHxERm9NSdZWrfsRv582rFD9TV`.
 
 Text size reduced (2026-10-08): feedback/reply inputs and conversation messages returned to 18px at the user's request. Build passed. Vercel deployment: `dpl_3machPtWJsC7czdyqs5egVj8Mfx9`.

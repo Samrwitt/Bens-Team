@@ -117,6 +117,7 @@ export async function retrieveContext(database, assignmentId, { localOnly = fals
   }
   return {
     assignment_id: assignmentId,
+    assignment: { title: assignment.title, status: assignment.status, due: assignment.due, owner: owner?.name || "Unassigned" },
     feedback_count: feedback.length,
     attachment_status: attachmentStatus,
     sources,

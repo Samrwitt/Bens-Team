@@ -105,5 +105,7 @@ textarea:disabled {
 .ai-feedback-composer .ai-feedback-draft { display: block; margin: 0; border: 0; background: transparent; padding: 10px 54px 10px 12px; min-height: 58px; }
 .ai-feedback-composer .ai-feedback-send { position: absolute; right: 8px; bottom: 8px; }
 
-#analysis-mode { margin: 6px 0; max-width: 100%; }
+.analysis-composer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+#analysis-form .analysis-composer-heading label { margin: 0; }
+#analysis-mode { width: auto; min-width: 76px; max-width: 110px; margin: 0; padding: 5px 8px; font: inherit; font-size: 13px; border-radius: 6px; }
 .analysis-mode-note { font-size: 12px; line-height: 1.5; }

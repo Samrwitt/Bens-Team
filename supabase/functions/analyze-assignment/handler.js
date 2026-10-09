@@ -1,4 +1,4 @@
-import { searchSources } from "./search.js";
+import { searchSources, progressOverview } from "./search.js";
 import { generateAnswer } from "./providers.js";
 import {
   AnalysisError,
@@ -101,6 +101,8 @@ export function createAnalysisHandler({
       }
       const context = await retrieveContext(database, body.assignment_id, { localOnly: mode === "local" });
       if (mode === "local") {
+        const overview = hasQuestion ? progressOverview(context, body.question) : null;
+        if (overview) return response({ ...context, mode, configured: true, ...overview });
         const matches = hasQuestion ? searchSources(context.sources, body.question) : [];
         return response({ ...context, mode, configured: true, matches,
           answer: matches.length ? `Found ${matches.length} matching excerpt(s). These are saved source text, not an AI answer.` : "No matching excerpts. Try specific words used in the assignment or feedback.",

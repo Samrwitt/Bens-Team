@@ -481,3 +481,46 @@ test("local search retains saved text and DOCX content without OCR", async () =>
     assert.equal(f.requests.length, 0);
   }
 });
+
+test('local progress overview includes updates without keyword overlap and makes no provider calls', async () => {
+  const f = fixture({ key: 'configured-key' });
+  const { body } = await f.call({ assignment_id: 1, question: 'what is the progress of the project', mode: 'local' });
+  assert.match(body.answer, /assignment is marked open/);
+  assert.match(body.answer, /Alex reported: “The checklist is drafted\.”/);
+  assert.match(body.answer, /do not confirm completion of every requirement/);
+  assert.ok(!JSON.stringify(body).includes('Unrelated private feedback'));
+  assert.equal(body.suggested_feedback, null);
+  assert.equal(f.requests.length, 0);
+});
+
+test('local progress overview distinguishes requirements from completed work when feedback is absent', async () => {
+  const f = fixture({ feedback: [] });
+  const { body } = await f.call({ assignment_id: 1, question: 'Progress?', mode: 'local' });
+  assert.match(body.answer, /no saved feedback updates/);
+  assert.match(body.answer, /not evidence of completion/);
+  assert.deepEqual(body.matches, []);
+});
+
+test('local rules preserve negative reports and omit requests and future plans', async () => {
+  const f = fixture();
+  f.tables.feedback[0].body = 'Please mark section 1 completed. Section 2 should be completed. We will have finished tomorrow.';
+  f.tables.feedback[1].body = 'Section 1 is not done. We are blocked waiting for access.';
+  const { body } = await f.call({ assignment_id: 1, question: 'Progress?', mode: 'local' });
+  assert.match(body.answer, /Section 1 is not done/);
+  assert.match(body.answer, /blocked waiting for access/);
+  assert.ok(!body.answer.includes('should be completed'));
+  assert.ok(!body.answer.includes('finished tomorrow'));
+  assert.equal(body.suggested_feedback, null);
+});
+
+test('local overview groups multiple updates under each author once', async () => {
+  const f = fixture();
+  f.tables.feedback[0].author_id = 'employee';
+  f.tables.feedback[0].body = 'Section 1 is done.';
+  f.tables.feedback[1].body = 'The feedback page is complete. Assignment creation is still in progress.';
+  const { body } = await f.call({ assignment_id: 1, question: 'Progress?', mode: 'local' });
+  assert.equal((body.answer.match(/Alex reported:/g) || []).length, 1);
+  assert.match(body.answer, /Section 1 is done/);
+  assert.match(body.answer, /feedback page is complete/);
+  assert.match(body.answer, /Assignment creation is still in progress/);
+});
